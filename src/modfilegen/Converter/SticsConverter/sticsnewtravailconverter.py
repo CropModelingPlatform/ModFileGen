@@ -33,9 +33,9 @@ class SticsNewTravailConverter(Converter):
         Dv = rw["dv"].values[0]
         fileContent += Dv + "\n"
         fileContent += ":nbplantes" + "\n"
-        rw = DT[DT["Champ"] == "nbplantes"]
-        Dv = rw["dv"].values[0]
-        fileContent += Dv + "\n"
+        #rw = DT[DT["Champ"] == "nbplantes"]
+        #Dv = rw["dv"].values[0]
+        fileContent += str(len(rows)) + "\n"
         fileContent += ":nom" + "\n"
         fileContent += rows[0]["SpeciesName"] + "\n"
         fileContent += ":datedebut" + "\n"
@@ -78,11 +78,19 @@ class SticsNewTravailConverter(Converter):
         fileContent += ":ftec1" + "\n"
         fileContent += "fictec1.txt" + "\n"
         fileContent += ":flai1" + "\n"
-        
         rw = DT[DT["Champ"] == "flai1"]
         Dv = rw["dv"].values[0]
-        fileContent += Dv + "\n"
+        fileContent += Dv + "\n"  
         
+        if len(rows) == 2:
+            fileContent += ":fplt2" + "\n"
+            fileContent += "ficplt2.txt" + "\n"
+            fileContent += ":ftec2" + "\n"
+            fileContent += "fictec2.txt" + "\n"    
+            fileContent += ":flai2" + "\n"
+            rw = DT[DT["Champ"] == "flai2"]
+            Dv = rw["dv"].values[0]
+            fileContent += Dv + "\n"
         try:
             self.write_file(usmdir, file_name, fileContent)
         except Exception as e:

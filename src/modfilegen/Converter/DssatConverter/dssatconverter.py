@@ -54,7 +54,7 @@ def write_file(directory, filename, content):
     with open(os.path.join(directory, filename), "w") as f:
         f.write(content)
         
-def process_chunk(chunk, mi, md, directoryPath,pltfolder, dt):
+def process_chunk(chunk, mi, md, directoryPath,pltfolder, dt, dssatv):
     dataframes = []
     # Apply series of functions to each row in the chunk
     weathertable = {}
@@ -72,7 +72,7 @@ def process_chunk(chunk, mi, md, directoryPath,pltfolder, dt):
              
             # cultivar 
             cultivarconverter = dssatcultivarconverter.DssatCultivarConverter()
-            crop = cultivarconverter.export(simPath, MasterInput_Connection, pltfolder, usmdir)
+            crop = cultivarconverter.export(simPath, MasterInput_Connection, pltfolder, usmdir, dssatv)
 
             # weather
             climid =  ".".join([str(row["idPoint"]), str(row["StartYear"])])
@@ -103,12 +103,16 @@ def process_chunk(chunk, mi, md, directoryPath,pltfolder, dt):
             simPath = os.path.join(directoryPath, str(row["idsim"]),str(row["idMangt"]))
             usmdir = os.path.join(directoryPath, str(row["idsim"])) 
             xconverter = dssatxconverter.DssatXConverter()
-            xconverter.export(simPath, ModelDictionary_Connection, MasterInput_Connection, usmdir, crop)
+            xconverter.export(simPath, ModelDictionary_Connection, MasterInput_Connection, usmdir, crop, dssatv)
 
             # run dssat
             bs = os.path.join(Path(__file__).parent, "dssatrun.sh")
             subprocess.run(["bash", bs, usmdir, directoryPath, str(dt)])
             summary = os.path.join(directoryPath, f"Summary_{str(row['idsim'])}.OUT")
+            # if summary exists, process it
+            if not os.path.exists(summary):
+                print(f"Summary file {summary} not found.")
+                continue
             df = transform(summary)
             dataframes.append(df)
             if dt==1: os.remove(summary)            
@@ -116,6 +120,9 @@ def process_chunk(chunk, mi, md, directoryPath,pltfolder, dt):
             print("Error during Running Dssat  :", ex)
             traceback.print_exc()
             sys.exit(1)
+    if not dataframes:
+        print("No dataframes to concatenate.")
+        return []
     return pd.concat(dataframes, ignore_index=True)
             
 def export(MasterInput, ModelDictionary):
@@ -188,6 +195,7 @@ def main():
     pltfolder = GlobalVariables["pltfolder"]
     nthreads = GlobalVariables["nthreads"]
     dt = GlobalVariables["dt"]
+    dssatv = GlobalVariables["dssat"]
     export(mi, md)
 
     import uuid
@@ -203,11 +211,17 @@ def main():
     chunks = chunk_data(data, chunk_size=nthreads)
     # Create a Pool of worker processes
     try:
+        print("dssat version: ", dssatv)
         start = time()
         with Pool(processes=nthreads) as pool:
             # Apply the processing function to each chunk in parallel
-            processed_data_chunks = pool.starmap(process_chunk,[(chunk, mi, md, directoryPath, pltfolder, dt) for chunk in chunks])  
+            processed_data_chunks = pool.starmap(process_chunk,[(chunk, mi, md, directoryPath, pltfolder, dt, dssatv) for chunk in chunks])  
             #Parallel(n_jobs=nthreads)(delayed(process_chunk)(chunk, mi, md, directoryPath, pltfolder) for chunk in chunks)
+
+        # check if processed_data_chunks is an empty list
+        if not processed_data_chunks:
+            print("No data to process.")
+            return
 
         processed_data = pd.concat(processed_data_chunks, ignore_index=True)
         processed_data.to_csv(os.path.join(directoryPath, f"{result_name}.csv"), index=False)

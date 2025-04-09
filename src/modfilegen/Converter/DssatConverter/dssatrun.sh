@@ -11,7 +11,7 @@ dt=$(echo $3 | awk '{print int($1)}')
 cd "$USM_DIR"
 
 dssat B DSSBatch.v47  > /dev/null
-
+#/home/midingoyi/tmp/dssat/run_dssat B DSSBatch.v48  > /dev/null
 base=$(basename "$USM_DIR")
 if [ -f "Summary.OUT" ]; then
     mv Summary.OUT "$input_dir/Summary_$base.OUT"

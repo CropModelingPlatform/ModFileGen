@@ -15,7 +15,7 @@ GlobalVariables["dt"] = 0
  
 def test_sticsconverter():
     c = SticsConverter()
-    c.nthreads = 6
+    c.nthreads = 2
     c.DirectoryPath = directory_path
     c.pltfolder = os.path.join(data,"cultivars","stics")
     r = c.export()

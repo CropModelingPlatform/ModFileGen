@@ -1062,7 +1062,22 @@ class SticsConverter(Converter):
                 processed_data_chunks = pool.starmap(self.process_chunk,[(chunk,mi, md, tpv6 ) for chunk in chunks])  
                 #Parallel(n_jobs=self.nthreads)(delayed(self.process_chunk)(chunk,mi, md, tpv6) for chunk in chunks)
             print(f"total time, {time()-start}")
+            # merge all the csv files in the output directory
+            print("toto")
+            self.merge_files()
         except Exception as ex:          
-            print("Export completed successfully!")
+            print("Export not completed successfully!")
+    
+    def merge_files(self):
+        import glob
+        # Merge all the csv files in the output directory
+        try:
+            all_files = glob.glob(os.path.join(self.DirectoryPath, "*.csv"))
+            print('all_files:', all_files)
+            df_from_each_file = (pd.read_csv(f) for f in all_files)
+            concatenated_df = pd.concat(df_from_each_file, ignore_index=True)
+            concatenated_df.to_csv(os.path.join(self.DirectoryPath, "output.csv"), index=False)
+        except Exception as ex:
+            print(f"Error merging files: {ex}")
 
     

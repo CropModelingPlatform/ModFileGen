@@ -1394,7 +1394,7 @@ class DssatXConverter(Converter):
     def __init__(self):
         super().__init__()
 
-    def export(self, directory_path, modelDictionary_Connection, master_input_connection,usmdir, crop):
+    def export(self, directory_path, modelDictionary_Connection, master_input_connection,usmdir, crop, dssatv):
         ST = directory_path.split(os.sep)
         idSim = ST[-2]
         idMangt = ST[-1]
@@ -1546,12 +1546,23 @@ class DssatXConverter(Converter):
             print("Error during writing file")
             print(e)
             
-        #  Fichier DSSBatch.v47
-        dssat_tableName = "dssat_x_treatment"
-        dssat_tableId = "dssat_x_exp_id"
-        fileContent = writeBlockTreatment2(dssat_tableName, fileName, idSim, modelDictionary_Connection)
-        self.write_file(usmdir, "DSSBatch.v47", fileContent)
-        fileContent = ""
+        # Write DSSBatch file
+        if dssatv == "v47":
+            #  Fichier DSSBatch.v47
+            dssat_tableName = "dssat_x_treatment"
+            dssat_tableId = "dssat_x_exp_id"
+            fileContent = writeBlockTreatment2(dssat_tableName, fileName, idSim, modelDictionary_Connection)
+            self.write_file(usmdir, "DSSBatch.v47", fileContent)
+            fileContent = ""
+        else:
+            # Fichier DSSBatch.v48
+            dssat_tableName = "dssat_x_treatment"
+            dssat_tableId = "dssat_x_exp_id"
+            fileContent = writeBlockTreatment2(dssat_tableName, fileName, idSim, modelDictionary_Connection)
+            self.write_file(usmdir, "DSSBatch.v48", fileContent)
+            fileContent = ""
+        
+        
 
 
 

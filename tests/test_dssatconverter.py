@@ -8,13 +8,15 @@ data = os.path.join(Path(__file__).parent, "data")
 modeldictionnary_f = os.path.join(data,"ModelsDictionaryArise.db")
 masterinput_f =  os.path.join(data, "MasterInput.db")
 
+directory_path = os.path.join(data, "output")
 
 GlobalVariables["dbModelsDictionary" ] = modeldictionnary_f     
 GlobalVariables["dbMasterInput" ] = masterinput_f 
-GlobalVariables["directorypath"] = data   # contains the path of list of USM
+GlobalVariables["directorypath"] = directory_path   # contains the path of list of USM
 GlobalVariables["pltfolder"] = os.path.join(data,"cultivars","dssat") # path of cultivars
 GlobalVariables["nthreads"] = 4
 GlobalVariables["dt"] = 0
+GlobalVariables["dssat"] = "v47"
 
 def test_dssatconverter():
     dssatconverter.main()

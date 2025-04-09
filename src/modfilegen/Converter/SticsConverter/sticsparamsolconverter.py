@@ -8,7 +8,7 @@ class SticsParamSolConverter(Converter):
     def __init__(self):
         super().__init__()
 
-    def export(self, directory_path, ModelDictionary_Connection, master_input_connection, usmdir):
+    def export(self, directory_path, ModelDictionary_Connection, master_input_connection, usmdir, vstics):
         file_name = "param.sol"
         fileContent = ""
         ST = directory_path.split(os.sep)
@@ -56,6 +56,10 @@ class SticsParamSolConverter(Converter):
             Dv = rw["dv"].values[0]
             fileContent += format(float(Dv), ".4f").rjust(7) + " "
             fileContent += format(row["OrganicC"]/row["OrganicNStock"], ".4f") + " " ### csurNsol Initial C to N ratio of soil humus
+            if vstics == "v10":
+                rw = DT[DT["Champ"] == "finert"]
+                Dv = rw["dv"].values[0]
+                fileContent += format(float(Dv), ".5f") + " "
             rw = DT[DT["Champ"] == "penterui"]
             Dv = rw["dv"].values[0]
             fileContent += format(float(Dv), ".4f") + " "
@@ -112,7 +116,7 @@ class SticsParamSolConverter(Converter):
             fileContent += format(float(Dv), ".4f") + " "
             fileContent += "\n"
             
-            sql = f"""Select * From soillayers where idsoil = "{row['IdSoil'].lower()}" Order by NumLayer"""
+            sql = f"""Select * From soillayers where idsoil = '{row['IdSoil'].lower()}' Order by NumLayer"""
             DA2 = pd.read_sql_query(sql, master_input_connection)
             rows = DA2.to_dict(orient='records')
             for i in range(5):
@@ -139,7 +143,7 @@ class SticsParamSolConverter(Converter):
                 else:
                     if i < len(rows):
                         fileContent += "     1   "
-                        fileContent += format(rows[i]["Ldown"] - rows[i]["LUp"], ".2f") + " "
+                        fileContent += format(rows[i]["Ldown"] - rows[i]["Lup"], ".2f") + " "
                         fileContent += format(rows[i]["Wfc"]/rows[i]["bd"], ".2f") + " "
                         fileContent += format(rows[i]["Wwp"]/rows[i]["bd"], ".2f") + " "
                         fileContent += format(rows[i]["bd"], ".2f") + " "
@@ -147,7 +151,7 @@ class SticsParamSolConverter(Converter):
                         rw = DT[DT["Champ"] == "typecailloux"]
                         Dv = rw["dv"].values[0]
                         fileContent += format(int(Dv)) + " "
-                        rw = DT[DT["Champ"] == "infil"]
+                        rw = DT[DT["Champ"] == "infil"]   # can change
                         Dv = rw["dv"].values[0]
                         fileContent += format(int(Dv)) + " "
                         rw = DT[DT["Champ"] == "epd"]

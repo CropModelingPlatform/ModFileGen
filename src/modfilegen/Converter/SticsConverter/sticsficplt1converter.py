@@ -11,6 +11,7 @@ class SticsFicplt1Converter(Converter):
 
     def export(self, directory_path, master_input_connection, pltfolder, usmdir):
         file_name = "ficplt1.txt"
+        file_name2 = "ficplt2.txt"
         ST = directory_path.split(os.sep)
         sq = """SELECT SimUnitList.idsim as idsim, ListCultOption.FicPlt as fic 
         FROM (ListCultOption INNER JOIN (ListCultivars INNER JOIN CropManagement ON ListCultivars.IdCultivar = CropManagement.Idcultivar) ON ListCultOption.CodePSpecies = ListCultivars.CodePSpecies) INNER JOIN SimUnitList ON CropManagement.idMangt = SimUnitList.idMangt where idSim= '%s' ;"""%(ST[-3])   
@@ -19,7 +20,12 @@ class SticsFicplt1Converter(Converter):
         
         src_path = os.path.join(pltfolder, rows[0]["fic"])
         dest_path = os.path.join(usmdir, file_name)
-        shutil.copyfile(src_path, dest_path)  
+        shutil.copyfile(src_path, dest_path)
+        if len(rows) == 2:
+            src_path2 = os.path.join(pltfolder, rows[1]["fic"])
+            dest_path2 = os.path.join(usmdir, file_name2)
+            shutil.copyfile(src_path2, dest_path2)
+
 
 
 
