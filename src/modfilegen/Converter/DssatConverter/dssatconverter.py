@@ -112,12 +112,12 @@ def process_chunk(*args):
             # run dssat
             bs = os.path.join(Path(__file__).parent, "dssatrun.sh")
             try:
-                result = subprocess.run(["bash", bs, usmdir, directoryPath, str(dt)],capture_output=True, check=True, text=True, timeout=60)
+                result = subprocess.run(["bash", bs, usmdir, directoryPath, str(dt)],capture_output=True, check=True, text=True, timeout=180)
             except subprocess.TimeoutExpired as e:
                 print(f"⏰ DSSAT run timed out for {usmdir}. Killing... {e}", flush=True)
                 # Forcefully terminate the process if it hangs
-                result.kill()  # Python 3.9+
-                continue
+                #result.kill()  # Python 3.9+
+                raise e
             except subprocess.CalledProcessError as e:
                 print(f"❌ DSSAT run failed for {usmdir} with return code {e.returncode}", flush=True)
                 print("STDOUT:\n", e.stdout)
@@ -246,7 +246,7 @@ def main():
             return
         processed_data = pd.concat(processed_data_chunks, ignore_index=True)
         processed_data.to_csv(os.path.join(directoryPath, f"{result_name}.csv"), index=False)
-        print(f"total time, {time()-start}")
+        print(f"Dssat total time, {time()-start}")
     except Exception as ex:      
         print("Export not completed successfully!")
         traceback.print_exc()

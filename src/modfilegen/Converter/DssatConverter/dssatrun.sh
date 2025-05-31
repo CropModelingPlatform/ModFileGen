@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+set -euo pipefail
 OLD_PWD="${PWD}"
 
 USM_DIR="$1"
