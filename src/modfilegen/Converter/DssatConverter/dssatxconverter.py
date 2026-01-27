@@ -1170,7 +1170,7 @@ def writeBlockManagement(dssat_tableName, dssat_tableId, idSim, modelDictionary_
 
 def writeBlockoutputs(dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection, dt):
     fileContent = ""
-    daily = "N" if dt !=1 else "Y"
+    daily = "N" if dt ==1 else "Y"
     siteColumnsHeader = "@N OUTPUTS     FNAME OVVEW SUMRY FROPT GROUT CAOUT WAOUT NIOUT MIOUT DIOUT VBOSE CHOUT OPOUT"
     dssat_queryRead = "Select Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'dssat') And ([Table] = '%s'));"%(dssat_tableName)
     DT = pd.read_sql_query(dssat_queryRead, modelDictionary_Connection)
