@@ -5,7 +5,7 @@ ModFileGen
    :target: https://modfilegen.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation Status
 
-ModFileGen is a Python package designed to **generate and run model input files for different models** based on a standardized shared database.  
+ModFileGen is a Python package designed to **generate model input files  and run simulations for different models** based on a standardized shared database.  
 It serves as a bridge between shared datasets and simulation-ready input files for crop models.
 
 Overview
