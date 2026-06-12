@@ -17,7 +17,11 @@ from joblib import Parallel, delayed, parallel_backend
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import sys
+import gc
 
+
+
+SUMMARY_COLS = ["Model","Idsim","Texte","Planting","Emergence","Ant","Mat","Biom_ma","Yield","GNumber","MaxLai","Nleac","SoilN","CroN_ma","CumE","Transp"]
 
 def get_coord(d):
     res = re.findall(r"([-]?\d+[.]?\d+)[_]", d)
@@ -1028,7 +1032,7 @@ def process_chunk(*args):
     initable.clear()
     
     # Concatenate in batches to reduce memory usage
-    batch_size = 1000
+    batch_size = 60000
     if len(dataframes) <= batch_size:
         result = pd.concat(dataframes, ignore_index=True)
         del dataframes  # Free the list
@@ -1109,6 +1113,14 @@ def chunk_data(data, parts, chunk_size):    # values, num_sublists
     sublists = [data[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(parts * chunk_size)]
     return sublists
 
+def process_chunk_safe(idx, args):
+    try:
+        chunk_df = process_chunk(*args)
+        return idx, chunk_df, None
+    except Exception:
+        return idx, None, traceback.format_exc()
+    
+    
 def main():
     mi = GlobalVariables.get("dbMasterInput")
     md = GlobalVariables.get("dbModelsDictionary")
@@ -1117,8 +1129,9 @@ def main():
     nthreads = GlobalVariables.get("nthreads", 4)
     dt = GlobalVariables.get("dt", 1)
     parts = GlobalVariables.get("parts", 1)
-    tempDir = GlobalVariables.get("tempDir") or os.path.join(directoryPath, "temp")
-    package = GlobalVariables.get("package") or str(Path(__file__).resolve().parents[3])
+    tempDir = GlobalVariables.get("tempDir")
+    package = GlobalVariables.get("package")
+    dailyoutput = GlobalVariables.get("dailyoutput", 0)
 
     if not mi or not md:
         raise ValueError("dbMasterInput and dbModelsDictionary must be set in GlobalVariables")
@@ -1142,12 +1155,14 @@ def main():
         with open(proffile, "r") as f:
             prof = f.read()
     export(mi, md)
+
     tppar = common_tempopar(md)
     tpv6 = common_tempoparv6(md)
 
     data = fetch_data_from_sqlite(mi)
     # Split data into chunks
     chunks = chunk_data(data, parts, chunk_size=nthreads)
+    n_simulations = len(data)
     print(f"📊 Total simulations to process: {len(data)}", flush=True)
     del data  # Free original data list after chunking
     # Create a Pool of worker processes
@@ -1162,45 +1177,103 @@ def main():
         result_path = os.path.join(directoryPath, f"{result_name}.csv")
     try:
         start = time()
+        
         # Use joblib Parallel with loky backend, write results directly to final file
         print(f"Processing {len(args_list)} chunks...", flush=True)
         
         write_header = True
         total_chunks_written = 0
+        MAX_SIMULATIONS_IN_MEMORY = 100000  # Adjust this threshold based on available memory and typical simulation size
         
-        with parallel_backend('loky', n_jobs=nthreads):
-            # Process in small batches to avoid holding all results in memory
-            batch_size = max(1, nthreads)  # Process nthreads chunks at a time
-            
-            for batch_idx in range(0, len(args_list), batch_size):
-                batch_args = args_list[batch_idx:batch_idx + batch_size]
-                
-                # Process this batch
-                batch_results = Parallel()(
-                    delayed(process_chunk)(*args) for args in batch_args
+        if n_simulations <= MAX_SIMULATIONS_IN_MEMORY:
+            print(f"Using in-memory concatenation for {n_simulations} simulations", flush=True)
+            processed_data_chunks = Parallel(n_jobs=nthreads, backend="loky")(
+                delayed(process_chunk)(*args) for args in args_list
+            )
+
+            processed_data_chunks = [
+                df for df in processed_data_chunks
+                if df is not None and not df.empty
+            ]
+
+            if processed_data_chunks:
+                processed_data = pd.concat(processed_data_chunks, ignore_index=True)
+                processed_data.to_csv(result_path, index=False)
+
+                print(
+                    f"✅ Written {len(processed_data)} rows to {result_path}",
+                    flush=True
                 )
-                
-                # Write each result directly to final file
-                for i, chunk_df in enumerate(batch_results):
-                    if not chunk_df.empty:
-                        # Append to result file (write header only once)
-                        chunk_df.to_csv(result_path, mode='a', header=write_header, index=False)
-                        write_header = False  # Only write header for first chunk
-                        total_chunks_written += 1
-                        print(f"✅ Chunk {batch_idx + i + 1}/{len(args_list)}: {len(chunk_df)} rows written", flush=True)
-                    
-                    # Free memory immediately
-                    del chunk_df
-                
-                # Free batch results
-                del batch_results
+
+                del processed_data
+            else:
+                print("No data to process.")
+                return
+
+            del processed_data_chunks
+            gc.collect()
         
-        if total_chunks_written == 0:
-            print("No data to process.")
-            return
+        else:
+            print(f"Using chunked processing for {n_simulations} simulations", flush=True)            
+            results = Parallel(
+                n_jobs=nthreads,
+                backend="loky",
+                return_as="generator_unordered",
+                batch_size="auto"
+            )(
+                delayed(process_chunk_safe)(i, args)
+                for i, args in enumerate(args_list)
+            )        
+
+            for idx, chunk_df, error in results:
+                if error is not None:
+                    print(f"❌ Chunk {idx + 1}/{len(args_list)} failed:\n{error}", flush=True)
+                    continue
+
+                if chunk_df is not None and not chunk_df.empty:
+                    chunk_df.to_csv(
+                        result_path,
+                        mode="a",
+                        header=write_header,
+                        index=False
+                    )
+                    write_header = False
+                    total_chunks_written += 1
+
+                    print(
+                        f"✅ Chunk {idx + 1}/{len(args_list)}: "
+                        f"{len(chunk_df)} rows written",
+                        flush=True
+                    )
+
+                del chunk_df
+                gc.collect()
+            
+            if total_chunks_written == 0:
+                print("No data to process.")
+                return
         
         print(f"✅ Results saved to {result_path}")
         print(f"STICS total time: {time()-start:.2f}s", flush=True)
+
+        if dailyoutput == 1:
+            summary_cols = ["Model", "Idsim", "Texte", "Planting", "Emergence", "Ant", "Mat",
+                            "Biom_ma", "Yield", "GNumber", "MaxLai", "Nleac", "SoilN",
+                            "CroN_ma", "CumE", "Transp"]
+            df_result = pd.read_csv(result_path, usecols=lambda c: c in summary_cols)
+            for col in summary_cols:
+                if col not in df_result.columns:
+                    df_result[col] = None
+            df_result = df_result[summary_cols]
+            _conn = sqlite3.connect(mi)
+            _conn.execute("DELETE FROM SummaryOutput WHERE Model = 'Stics'")
+            _conn.commit()
+            df_result.to_sql("SummaryOutput", _conn, if_exists="append", index=False)
+            _conn.commit()
+            _conn.close()
+            print(f"✅ {len(df_result)} rows inserted into SummaryOutput.", flush=True)
+            del df_result
+
     except Exception as ex:  
         print("Error during processing:", ex)
         traceback.print_exc() 
