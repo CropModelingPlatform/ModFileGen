@@ -2802,7 +2802,7 @@ sticsv11,paramsol,cailloux,volumetric content of pebbles per soil layer,v% (in r
 sticsv11,paramsol,typecailloux,"Pebbles type defined by a volumetric mass value (masvolx) and a field capacity moisture value (HCCCX) only used  if codecailloux=1 . (typecailloux= 1:Beauce limestone1, 2:Beauce limestone2, 3:lutecian limestone, 4:Lutetian Brackish marl and limestone,5:Mo",SD,integer,soil,1,0,1,NULL,0,NULL,NULL,10,PARSOL,NULL,NULL,1.0,10.0,NULL,NULL
 sticsv11,paramsol,infil,infiltrability rate at the base of each soil layer (if codemacropor = 1),mm.d-1,real,soil,1,0,1,NULL,0,NULL,NULL,50.00,PARSOL,NULL,NULL,0.1,100.0,NULL,NULL
 sticsv11,paramsol,epd,thickness of mixing cells in each soil layer ( = 2 * dispersion length),cm,integer,soil,1,0,1,NULL,0,NULL,NULL,10,PARSOL,NULL,NULL,1.0,50.0,NULL,NULL
-sticsv11,station,zr,reference height of meteorological data measurement,m,real,climate,1,0,1,NULL,0,NULL,NULL,2.50000,STATION,2.0,NULL,2.0,10.0,NULL,NULL
+sticsv11,station,zr,reference height of meteorological data measurement,m,real,climate,1,0,1,NULL,0,NULL,NULL,2.50000,STATION,3.0,NULL,2.0,10.0,NULL,NULL
 sticsv11,station,NH3ref,NH3 concentration in the atmosphere,?Ág.m-3,real,climate,1,0,1,NULL,0,NULL,NULL,0.00000,STATION,NULL,NULL,0.0,10.0,NULL,NULL
 sticsv11,station,concrr,"	Option to activate the optimisation code: 0 = no, 1 = optimisation for the main crop, 2 = optimisation for the associated crop",NULL,NULL,NULL,0,0,1,NULL,0,NULL,NULL,0.02,NULL,NULL,NULL,NULL,NULL,NULL,NULL
 sticsv11,station,latitude,latitude of the site,degree,real,climate,1,0,0,NULL,1,latitudeDD,NULL,51.00000,STATION,NULL,NULL,-90.0,90.0,NULL,NULL

@@ -344,3 +344,38 @@ def test_the_command_reaches_perform_through_main(
 
     assert cli.main(arguments) == 0
     assert dispatcher == ["ran"]
+
+
+# --- comparable names ------------------------------------------------------
+
+
+def test_a_run_identifier_is_replaced_in_the_manifest():
+    """Every model names its summary CSV <uuid4>_<model>.csv, so two runs of
+    the same inputs would otherwise share no single line."""
+    name = "f18b1399-1c98-41c7-9974-4974544c94f9_stics_successive.csv"
+
+    assert run_command.comparable_name(name) == "<run-id>_stics_successive.csv"
+
+
+def test_only_a_leading_identifier_is_replaced():
+    assert (
+        run_command.comparable_name("sub/f18b1399-1c98-41c7-9974-4974544c94f9_a.csv")
+        == "sub/<run-id>_a.csv"
+    )
+    assert run_command.comparable_name("plain.csv") == "plain.csv"
+    assert (
+        run_command.comparable_name("a_f18b1399-1c98-41c7-9974-4974544c94f9.csv")
+        == "a_f18b1399-1c98-41c7-9974-4974544c94f9.csv"
+    )
+
+
+def test_two_runs_of_the_same_inputs_give_the_same_manifest(tmp_path):
+    first, second = tmp_path / "one", tmp_path / "two"
+    for directory, identifier in (
+        (first, "f18b1399-1c98-41c7-9974-4974544c94f9"),
+        (second, "0a1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9"),
+    ):
+        directory.mkdir()
+        (directory / f"{identifier}_stics.csv").write_text("idsim,yield\na,1\n")
+
+    assert run_command.manifest(first) == run_command.manifest(second)

@@ -87,6 +87,7 @@ This overwrites `schema.sql` and every CSV file.
 | 2026-10-24 | `migrations/20261024_add_soil_ssks.sql` | `Soil.Ssks` and `SoilLayers.Ssks` (cm/h), NULL in the fixture. |
 | 2026-10-24 | `migrations/20261024_add_soil_drainfao.sql` | `Soil.DrainFAO` (FAO drainage class 1 to 7), NULL in the fixture. |
 | 2026-10-24 | MasterInput `Soil` schema | `RunoffType` declared TEXT, like `RunoffTypes.RunoffType` (values unchanged). |
+| 2026-11-26 | ModelsDictionary `Variables` | `sticsv11.station.zr` raised from 2.0 to 3.0 m (`defaultValueOtherSource`; domain 2.0 to 10.0). STICS refuses to run with exit 9 when `codeetp` is 3 (Shuttleworth-Wallace) and the weather measurement height is not above the crop: every maize plant file in the fixture has `hautmax` 2.5 m, so 2.0 m made the whole fixture unrunnable. 3.0 m clears the tallest crop; peanut is 0.65 m. |
 
 The initial content covers: one point and one soil, years 2000 to 2002,
 5 simulations, successive seasons, two-crop association, non-zero irrigation,

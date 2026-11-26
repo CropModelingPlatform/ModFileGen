@@ -154,7 +154,7 @@ class SticsFictec1Converter(Converter):
                     fileContent += str(rows2[i]["CNferti"] * rows2[i]["NFerti"]) + " "
                     fileContent += str(rows2[i]["CNferti"]) + " "
                     fileContent += str(rows2[i]["NFerti"]) + " "
-                    fileContent += self.FormatSticsRawData(DT, "supply of organic residus.eaures") + "\n"
+                    fileContent += self.FormatSticsRawData(DT, "eaures") + "\n"
         fileContent += self.format_item(DT, "code_auto_profres")
         fileContent += self.format_item(DT, "resk")
         fileContent += self.format_item(DT, "resz")
@@ -400,7 +400,7 @@ class SticsFictec1Converter(Converter):
                     fileContent += str(rows2[i]["CNferti"] * rows2[i]["NFerti"]) + " "
                     fileContent += str(rows2[i]["CNferti"]) + " "
                     fileContent += str(rows2[i]["NFerti"]) + " "
-                    fileContent += self.FormatSticsRawData(DT, "supply of organic residus.eaures") + "\n"
+                    fileContent += self.FormatSticsRawData(DT, "eaures") + "\n"
         fileContent += self.format_item(DT, "code_auto_profres")
         fileContent += self.format_item(DT, "resk")
         fileContent += self.format_item(DT, "resz")
@@ -673,6 +673,13 @@ class SticsFictec1Converter(Converter):
 
     def FormatSticsRawData(self, data, champ, precision  = 1):
         rw2 = data[data["Champ"]==champ]
+        if rw2.empty:
+            # An IndexError here names a numpy axis, not the parameter that
+            # the ModelsDictionary is missing.
+            raise KeyError(
+                f"the sticsv11 fictec1 parameter {champ!r} is not in the "
+                "ModelsDictionary Variables table"
+            )
         res = rw2["dv"].values[0]
         return res
 

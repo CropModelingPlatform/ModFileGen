@@ -132,5 +132,16 @@ The scratch directory is left out of the listing: the engines write run
 timestamps into their raw output, so those files differ between two runs of
 the same inputs on the same machine and would drown the comparison.
 
+Every model names its summary CSV ``<uuid4>_<model>.csv``, so that parallel
+and repeated runs into one directory cannot collide. That identifier belongs
+to the run, not to its content, so the manifest replaces it with
+``<run-id>``::
+
+    edc6ce001b029191...47347c21  <run-id>_stics_successive.csv
+
+Without that substitution the manifest could not do the one job it has: two
+runs producing the very same bytes would share no single line, and a diff
+would report every file as changed.
+
 No manifest is written for a failed run. A partial listing that looks like a
 result is worse than none.

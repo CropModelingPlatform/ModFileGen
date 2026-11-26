@@ -78,17 +78,22 @@ and linked to an issue or pull request when one exists.
   Documented in `docs/source/command_line.rst`, guarded by a test that the
   page names every option the parser accepts -- which immediately caught
   four it did not.
-- [ ] Make the committed CSV fixture runnable. `agriscale run --model stics
-  --version v11 --mode successive` against it reaches STICS and the engine
-  refuses the inputs with exit 9: `zr` is 2.0 in the station file while
-  `hautmax` is 2.5 in `maitest.txt`, and STICS requires the measurement
-  height above the crop height when `codeetp` is 3 (Shuttleworth-Wallace).
-  Either raise `zr` above 2.5 in the fixture's station data or lower
-  `hautmax`; document the change, per the fixture rule. Every management row
-  in the fixture uses `testcult`/`testcult2`, whose plant files
-  (`maitest.txt`, `peanut.txt`) live in
-  `tests/stics_successive/cultivars/stics` and are already committed, so no
-  new plant file is needed for STICS.
+- [x] The committed CSV fixture now runs end to end under STICS v11
+  successive: 5 simulations, a 3-season rotation, 10 `SummaryOutput` rows,
+  exit 0. Two defects were in the way. `sticsv11.station.zr` was 2.0 m while
+  every maize plant file has `hautmax` 2.5 m, and STICS exits 9 when the
+  weather measurement height is not above the crop under Shuttleworth-Wallace
+  (`codeetp` 3); raised to 3.0 m, documented in `tests/fixtures/README.md`.
+  And `sticsfictec1converter` asked the v11 dictionary for the v9 field name
+  `supply of organic residus.eaures`, which only exists as `eaures` under
+  `sticsv11`/`fictec1`, so any management supplying organic residues died in
+  `FormatSticsRawData` with a bare numpy IndexError. It now raises a KeyError
+  naming the parameter and the table.
+- [ ] Decide whether the summary CSV should keep its `uuid4` prefix. It
+  prevents collisions between parallel and repeated runs, but makes the file
+  name differ between two runs of the same inputs; `agriscale run --manifest`
+  works around it by substituting `<run-id>`. A name derived from the run's
+  inputs would serve both ends.
 - [ ] Ship the fixture as a demo dataset inside the package, so `pip install`
   is self-sufficient without the repository. The STICS side needs no choice
   any more; DSSAT still does: the fixture declares `CER047` for maize and an

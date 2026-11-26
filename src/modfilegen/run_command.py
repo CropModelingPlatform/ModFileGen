@@ -12,6 +12,7 @@ simulation, so the parallel path and its performance are untouched.
 
 import hashlib
 import os
+import re
 from pathlib import Path, PurePath
 
 from modfilegen import GlobalVariables, engines
@@ -175,13 +176,34 @@ def _digest(path):
     return digest.hexdigest()
 
 
+#: Every model names its summary CSV "<uuid4>_<model>.csv", so that parallel
+#: runs and successive runs into one directory cannot collide. The identifier
+#: belongs to the run, not to the content.
+_RUN_ID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_", re.I
+)
+
+
+def comparable_name(name):
+    """``name`` with a leading run identifier replaced by a fixed token.
+
+    Without this the manifest could not do the one job it has. Two runs of
+    the same inputs produce the same bytes under different names, so a diff
+    of the two manifests would report every file as changed and nothing as
+    equal -- the opposite of the truth.
+    """
+    head, _, tail = name.rpartition("/")
+    replaced = _RUN_ID.sub("<run-id>_", tail)
+    return f"{head}/{replaced}" if head else replaced
+
+
 def manifest(output, skip=()):
     """``(relative path, sha256)`` for every file under ``output``.
 
-    Paths are written with forward slashes and sorted, so a manifest made on
-    Windows can be compared with one made on Linux byte for byte. That
-    comparison is the point: it is how a run on a student's machine is
-    checked against a known-good one.
+    Paths use forward slashes, a leading run identifier is replaced, and the
+    rows are sorted, so a manifest made on Windows can be compared with one
+    made on Linux byte for byte. That comparison is the point: it is how a
+    run on a student's machine is checked against a known-good one.
     """
     output = Path(output)
     skipped = {Path(path).resolve() for path in skip}
@@ -195,7 +217,7 @@ def manifest(output, skip=()):
         ):
             continue
         name = "/".join(PurePath(path.relative_to(output)).parts)
-        rows.append((name, _digest(path)))
+        rows.append((comparable_name(name), _digest(path)))
     return sorted(rows)
 
 
