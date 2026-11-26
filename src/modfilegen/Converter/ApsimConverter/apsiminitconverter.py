@@ -16,6 +16,7 @@ Date: 2024-2026
 from modfilegen.converter import Converter
 import os
 import pandas as pd
+from modfilegen import text_files
 import json
 import traceback
 
@@ -114,7 +115,7 @@ class ApsimInitConverter(Converter):
             init_structure = self._build_init_structure(row, soil_layers, defaults, **kwargs)
             
             # Save to file
-            with open(output_apsimx, 'w') as f:
+            with open(output_apsimx, 'w', **text_files.WRITE) as f:
                 json.dump(init_structure, f, indent=2)
             
             print(f"✓ Created initialization file: {output_apsimx}")
@@ -527,7 +528,7 @@ class ApsimInitConverter(Converter):
         """
         init_structure = self._build_init_structure(None, [], {}, **kwargs)
         
-        with open(output_apsimx, 'w') as f:
+        with open(output_apsimx, 'w', **text_files.WRITE) as f:
             json.dump(init_structure, f, indent=2)
         
         print(f"✓ Created initialization file: {output_apsimx}")

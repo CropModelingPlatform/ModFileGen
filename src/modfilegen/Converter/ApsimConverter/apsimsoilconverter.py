@@ -15,6 +15,7 @@ The soil structure in APSIM includes:
 from modfilegen.converter import Converter
 import os
 import pandas as pd
+from modfilegen import text_files
 import json
 import traceback
 
@@ -209,13 +210,13 @@ class ApsimSoilConverter(Converter):
             physical['DUL'], physical['LL15'], physical['Thickness']))
         output_apsimx = os.fspath(output_apsimx)
         if os.path.exists(output_apsimx):
-            with open(output_apsimx) as stream:
+            with open(output_apsimx, **text_files.READ) as stream:
                 document = json.load(stream)
             if not self._update_soil_in_apsimx(document, soil_json):
                 raise ValueError(f"No soil node in {output_apsimx}")
         else:
             document = self._create_minimal_apsimx(soil_json)
-        with open(output_apsimx, 'w') as stream:
+        with open(output_apsimx, 'w', **text_files.WRITE) as stream:
             json.dump(document, stream, indent=2, allow_nan=False)
         return output_apsimx
 
@@ -259,7 +260,7 @@ class ApsimSoilConverter(Converter):
         try:
             # If output_apsimx exists, update it; otherwise create new
             if os.path.exists(output_apsimx):
-                with open(output_apsimx, 'r') as f:
+                with open(output_apsimx, 'r', **text_files.READ) as f:
                     apsimx_data = json.load(f)
                 # Find and replace soil in the structure
                 self._update_soil_in_apsimx(apsimx_data, soil_json)
@@ -268,7 +269,7 @@ class ApsimSoilConverter(Converter):
                 apsimx_data = self._create_minimal_apsimx(soil_json)
             
             # Write updated/new file
-            with open(output_apsimx, 'w') as f:
+            with open(output_apsimx, 'w', **text_files.WRITE) as f:
                 json.dump(apsimx_data, f, indent=2)
             
             print(f"Successfully created/updated APSIM soil in: {output_apsimx}")

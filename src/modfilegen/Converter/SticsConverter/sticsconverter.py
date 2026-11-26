@@ -1,6 +1,7 @@
 from modfilegen import GlobalVariables
 from modfilegen.weather_coverage import keep_simulations_with_weather
 from modfilegen.coordinate_resolver import CoordinateResolver
+from modfilegen import text_files
 from modfilegen.converter import Converter
 from modfilegen.output_configuration import OutputConfiguration
 from .summary_output import (
@@ -36,11 +37,11 @@ PROFILE_OUTPUT_TABLE = "SticsProfile"
 
 def remove_comma(f):
     try:
-        with open(f, "r") as fil:
+        with open(f, "r", **text_files.READ_ENGINE) as fil:
             cod =fil.readlines()
         if cod[-1].endswith(";\n"):
             cod[-1] = cod[-1].replace(";\n", "\n")
-        with open(f, "w") as fil:
+        with open(f, "w", **text_files.WRITE) as fil:
             fil.writelines(cod)
     except Exception as e:
         print(f"Error removing comma in file {f}: {e}")
@@ -75,7 +76,7 @@ def create_df_daily(mod_s_file, idsim):
 
 def create_df_profile(profile_file, idsim):
     """Convert a STICS profile matrix to long form (day, depth, variable, value)."""
-    with open(profile_file, "r") as profile_stream:
+    with open(profile_file, "r", **text_files.READ_ENGINE) as profile_stream:
         variable = profile_stream.readline().strip()
         header = profile_stream.readline().split()
 
@@ -891,7 +892,7 @@ def format_stics_data(row, champ, precision=5, field_it=0):
 
 def write_file(directory, filename, content):
     try:
-        with open(os.path.join(directory, filename), "w") as f:
+        with open(os.path.join(directory, filename), "w", **text_files.WRITE) as f:
             f.write(content)
     except Exception as e:
         print(f"Error writing file {filename} in {directory}: {e}")
@@ -1307,14 +1308,14 @@ def main():
         prof = common_prof()
     else:
         rapfile = os.path.join(stics_params, "rap.mod")
-        with open(rapfile, "r") as f:
+        with open(rapfile, "r", **text_files.READ) as f:
             rap_template = f.read()
         rap = common_rap(output_configuration, output_selection, rap_template)
         varfile = os.path.join(stics_params, "var.mod")
-        with open(varfile, "r") as f:
+        with open(varfile, "r", **text_files.READ) as f:
             var = f.read()
         proffile = os.path.join(stics_params, "prof.mod")
-        with open(proffile, "r") as f:
+        with open(proffile, "r", **text_files.READ) as f:
             prof = f.read()
     export(mi, md)
 

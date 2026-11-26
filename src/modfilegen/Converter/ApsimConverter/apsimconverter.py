@@ -11,6 +11,7 @@ Author: ModFileGen Team
 Date: 2024-2026
 """
 
+from modfilegen import text_files
 from modfilegen import GlobalVariables, engines
 from modfilegen.weather_coverage import keep_simulations_with_weather
 from modfilegen.converter import Converter
@@ -133,7 +134,7 @@ def write_file(directory, filename, content):
     """Write content to file."""
     try:
         os.makedirs(directory, exist_ok=True)
-        with open(os.path.join(directory, filename), "w") as f:
+        with open(os.path.join(directory, filename), "w", **text_files.WRITE) as f:
             f.write(content)
     except Exception as e:
         print(f"Error writing file {filename}: {e}")
@@ -218,7 +219,7 @@ def process_chunk(*args):
             # Write weather file from content
             weather_file = os.path.join(usmdir, "weather.met")
             if weather_content:
-                with open(weather_file, 'w') as f:
+                with open(weather_file, 'w', **text_files.WRITE) as f:
                     f.write(weather_content)
                 print(f"Successfully created weather file: {weather_file}")
             else:
@@ -380,7 +381,7 @@ def update_apsim_template(sim_file, row, weather_file, soil_file, management_fil
     """
     try:
         # Load existing simulation file
-        with open(sim_file, 'r') as f:
+        with open(sim_file, 'r', **text_files.READ) as f:
             simulation = json.load(f)
         
         # Find and update Clock dates
@@ -422,7 +423,7 @@ def update_apsim_template(sim_file, row, weather_file, soil_file, management_fil
         # Update soil data if provided
         if soil_file and os.path.exists(soil_file):
             try:
-                with open(soil_file, 'r') as f:
+                with open(soil_file, 'r', **text_files.READ) as f:
                     soil_data = json.load(f)
                 
                 # Extract soil component
@@ -467,7 +468,7 @@ def update_apsim_template(sim_file, row, weather_file, soil_file, management_fil
         # Update management operations if provided
         if management_file and os.path.exists(management_file):
             try:
-                with open(management_file, 'r') as f:
+                with open(management_file, 'r', **text_files.READ) as f:
                     mgmt_data = json.load(f)
                 
                 # Extract management operations
@@ -510,7 +511,7 @@ def update_apsim_template(sim_file, row, weather_file, soil_file, management_fil
         # Update initialization if provided
         if init_file and os.path.exists(init_file):
             try:
-                with open(init_file, 'r') as f:
+                with open(init_file, 'r', **text_files.READ) as f:
                     init_data = json.load(f)
                 
                 # Extract initialization components
@@ -553,7 +554,7 @@ def update_apsim_template(sim_file, row, weather_file, soil_file, management_fil
                 print(f"    ⚠ Warning: Could not update initialization in template: {e}")
         
         # Save updated simulation
-        with open(sim_file, 'w') as f:
+        with open(sim_file, 'w', **text_files.WRITE) as f:
             json.dump(simulation, f, indent=2)
         
         print(f"  ✓ Updated template simulation file: {sim_file}")
@@ -609,7 +610,7 @@ def create_apsim_simulation(usmdir, row, weather_file, soil_file, management_fil
     # Add soil if available
     if soil_file and os.path.exists(soil_file):
         try:
-            with open(soil_file, 'r') as f:
+            with open(soil_file, 'r', **text_files.READ) as f:
                 soil_data = json.load(f)
             # Extract soil from file and add to simulation
             soil_component = find_soil_component(soil_data)
@@ -621,7 +622,7 @@ def create_apsim_simulation(usmdir, row, weather_file, soil_file, management_fil
     # Add management if available
     if management_file and os.path.exists(management_file):
         try:
-            with open(management_file, 'r') as f:
+            with open(management_file, 'r', **text_files.READ) as f:
                 mgmt_data = json.load(f)
             # Extract management operations
             if 'Children' in mgmt_data:
@@ -636,7 +637,7 @@ def create_apsim_simulation(usmdir, row, weather_file, soil_file, management_fil
     # Add initialization if available
     if init_file and os.path.exists(init_file):
         try:
-            with open(init_file, 'r') as f:
+            with open(init_file, 'r', **text_files.READ) as f:
                 init_data = json.load(f)
             # Extract initialization components
             if 'Children' in init_data:
@@ -672,7 +673,7 @@ def create_apsim_simulation(usmdir, row, weather_file, soil_file, management_fil
     
     # Write simulation file
     sim_file = os.path.join(usmdir, "Simulation.apsimx")
-    with open(sim_file, 'w') as f:
+    with open(sim_file, 'w', **text_files.WRITE) as f:
         json.dump(simulation, f, indent=2)
     
     print(f"  ✓ Created simulation file: {sim_file}")

@@ -27,6 +27,7 @@ Metadata:
 """
 
 from modfilegen.converter import Converter
+from modfilegen import text_files
 import os
 import pandas as pd
 import traceback
@@ -174,7 +175,7 @@ class ApsimWeatherConverter(Converter):
                 os.makedirs(output_dir, exist_ok=True)
             
             # Write content to file
-            with open(output_file, 'w') as f:
+            with open(output_file, 'w', **text_files.WRITE) as f:
                 f.write(content)
             
             print(f"✓ Weather file created: {output_file}")
@@ -408,7 +409,7 @@ class ApsimWeatherConverter(Converter):
                 os.makedirs(output_dir, exist_ok=True)
             
             # Write file
-            with open(output_path, 'w') as f:
+            with open(output_path, 'w', **text_files.WRITE) as f:
                 f.write(file_content)
             
             print(f"Successfully created weather file: {output_path}")

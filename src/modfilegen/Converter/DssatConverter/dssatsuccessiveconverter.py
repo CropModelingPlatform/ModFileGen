@@ -26,7 +26,7 @@ import uuid
 import pandas as pd
 from joblib import Parallel, delayed, parallel_backend
 
-from modfilegen import GlobalVariables
+from modfilegen import GlobalVariables, text_files
 from modfilegen.weather_coverage import (
     keep_rows_in_simulation_period,
     keep_simulations_with_weather,
@@ -1000,7 +1000,7 @@ def export_grouped_weather(group, context, sequence_dir):
 
 
 def transform_sequence(summary_path, rotations, coordinates=None):
-    with open(summary_path, "r") as handle:
+    with open(summary_path, "r", **text_files.READ_ENGINE) as handle:
         lines = handle.readlines()
     if len(lines) < 5:
         return pd.DataFrame()
@@ -1082,7 +1082,7 @@ def read_sequence_daily(sequence_dir, idsim, simulation=None):
 
 def read_sequence_daily_file(file_path, source):
     """Read a sequence output whose columns may change between crops."""
-    with open(file_path, "r") as output_stream:
+    with open(file_path, "r", **text_files.READ_ENGINE) as output_stream:
         lines = output_stream.readlines()
 
     columns = None

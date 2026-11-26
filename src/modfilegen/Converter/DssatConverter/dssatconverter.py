@@ -20,6 +20,7 @@ from modfilegen.weather_coverage import (
 from modfilegen.coordinate_resolver import CoordinateResolver
 from modfilegen.parameter_resolver import ParameterResolver
 from modfilegen.soil_repository import SoilDataRepository
+from modfilegen import text_files
 from modfilegen.converter import Converter
 from modfilegen.output_configuration import OutputConfiguration
 from .summary_output import transform_summary_dataframe
@@ -70,7 +71,7 @@ def extract_corrected_doy(date_col, ys):
 
 
 def transform(fil, coordinates, simulation_year):
-    with open(fil, "r") as fil_:
+    with open(fil, "r", **text_files.READ_ENGINE) as fil_:
         FILE = fil_.readlines()
     #d_name = os.path.dirname(fil).split(os.path.sep)[-1]
     d_name = Path(fil).stem[len("Summary_"):]
@@ -95,7 +96,7 @@ def transform(fil, coordinates, simulation_year):
 
 def read_dssat_daily_file(file_path, source):
     """Read one DSSAT daily output and prefix non-date columns by source."""
-    with open(file_path, "r") as output_stream:
+    with open(file_path, "r", **text_files.READ_ENGINE) as output_stream:
         lines = output_stream.readlines()
 
     header_index = next(
@@ -202,7 +203,7 @@ def align_sqlite_table(connection, table_name, dataframe):
 
 def write_file(directory, filename, content):
     try:
-        with open(os.path.join(directory, filename), "w") as f:
+        with open(os.path.join(directory, filename), "w", **text_files.WRITE) as f:
             f.write(content)
     except Exception as e:
         print(f"Error writing file {filename}: {e}")    

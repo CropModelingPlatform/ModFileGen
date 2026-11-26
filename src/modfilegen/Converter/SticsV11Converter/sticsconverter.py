@@ -1,6 +1,7 @@
 from modfilegen import GlobalVariables
 from modfilegen.weather_coverage import keep_simulations_with_weather
 from modfilegen.coordinate_resolver import CoordinateResolver
+from modfilegen import text_files
 from modfilegen.converter import Converter
 from modfilegen.parameter_resolver import ParameterResolver
 from modfilegen.soil_repository import SoilDataRepository
@@ -33,11 +34,11 @@ PROFILE_OUTPUT_TABLE = "SticsProfile"
 
 def remove_comma(f):
     try:
-        with open(f, "r") as fil:
+        with open(f, "r", **text_files.READ_ENGINE) as fil:
             cod =fil.readlines()
         if cod[-1].endswith(";\n"):
             cod[-1] = cod[-1].replace(";\n", "\n")
-        with open(f, "w") as fil:
+        with open(f, "w", **text_files.WRITE) as fil:
             fil.writelines(cod)
     except Exception as e:
         print(f"Error removing comma in file {f}: {e}")
@@ -93,7 +94,7 @@ def collect_daily_outputs(directory_path, key, idsim, season_order, is_mixed_cro
 
 def create_df_profile(profile_file, idsim, season_order=1, plant_role=""):
     """Convert one STICS v11 profile matrix to normalized long form."""
-    with open(profile_file, "r") as profile_stream:
+    with open(profile_file, "r", **text_files.READ_ENGINE) as profile_stream:
         variable = profile_stream.readline().strip()
         header = profile_stream.readline().split()
     if len(header) < 2 or header[0].lower() != "cm":
@@ -910,7 +911,7 @@ def format_stics_data(row, champ, precision=5, field_it=0):
 
 def write_file(directory, filename, content):
     try:
-        with open(os.path.join(directory, filename), "w") as f:
+        with open(os.path.join(directory, filename), "w", **text_files.WRITE) as f:
             f.write(content)
     except Exception as e:
         print(f"Error writing file {filename} in {directory}: {e}")
@@ -1299,13 +1300,13 @@ def _main_standard(simulations=None):
         prof = common_prof()
     else:
         rapfile = os.path.join(stics_params, "rap.mod")
-        with open(rapfile, "r") as f:
+        with open(rapfile, "r", **text_files.READ) as f:
             rap = f.read()
         varfile = os.path.join(stics_params, "var.mod")
-        with open(varfile, "r") as f:
+        with open(varfile, "r", **text_files.READ) as f:
             var = f.read()
         proffile = os.path.join(stics_params, "prof.mod")
-        with open(proffile, "r") as f:
+        with open(proffile, "r", **text_files.READ) as f:
             prof = f.read()
     export(mi, md)
 
@@ -1743,11 +1744,11 @@ def main():
 
     stics_params = os.path.join(package, "data", "stics_params")
     if os.path.exists(stics_params):
-        with open(os.path.join(stics_params, "rap.mod")) as stream:
+        with open(os.path.join(stics_params, "rap.mod"), **text_files.READ) as stream:
             rap = stream.read()
-        with open(os.path.join(stics_params, "var.mod")) as stream:
+        with open(os.path.join(stics_params, "var.mod"), **text_files.READ) as stream:
             var = stream.read()
-        with open(os.path.join(stics_params, "prof.mod")) as stream:
+        with open(os.path.join(stics_params, "prof.mod"), **text_files.READ) as stream:
             prof = stream.read()
     else:
         rap, var, prof = common_rap(), common_var(), common_prof()

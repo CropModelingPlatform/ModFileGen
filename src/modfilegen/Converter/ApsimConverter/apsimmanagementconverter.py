@@ -13,6 +13,7 @@ Author: Generated for ModFileGen project
 
 import pandas as pd
 import sqlite3
+from modfilegen import text_files
 import json
 import os
 import sys
@@ -118,7 +119,7 @@ class ApsimManagementConverter(Converter):
         # Check if file exists
         if os.path.exists(output_apsimx):
             # Update existing file
-            with open(output_apsimx, 'r') as f:
+            with open(output_apsimx, 'r', **text_files.READ) as f:
                 apsimx_data = json.load(f)
             
             # Add or update management folder
@@ -136,7 +137,7 @@ class ApsimManagementConverter(Converter):
         
         # Write to file
         os.makedirs(os.path.dirname(os.path.abspath(output_apsimx)), exist_ok=True)
-        with open(output_apsimx, 'w') as f:
+        with open(output_apsimx, 'w', **text_files.WRITE) as f:
             json.dump(apsimx_data, f, indent=2)
         
         print(f"Successfully created/updated APSIM management in: {output_apsimx}")

@@ -1,3 +1,4 @@
+from modfilegen import text_files
 import sqlite3
 import os
 import datetime
@@ -35,7 +36,9 @@ class Converter:
             Path(DirectoryPath).mkdir(parents=True, exist_ok=True)
             #os.makedirs(DirectoryPath)
         
-        with open(os.path.join(DirectoryPath, FileName), "w") as outfile:
+        with open(
+            os.path.join(DirectoryPath, FileName), "w", **text_files.WRITE
+        ) as outfile:
             outfile.write(FileContent)
 
     def format_item(self, Item):
