@@ -15,7 +15,7 @@ def raw_output():
             "Idsim": ["CEL-1"],
             "iplt": [10],
             "JulPheno1_1": [15],
-            "JulPheno1_4": [70],
+            "JulPheno1_3": [70],
             "JulPheno1_6": [120],
             "Biom(nrec)": [8.5],
             "Grain(nrec)": [3.25],

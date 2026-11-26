@@ -1,0 +1,16 @@
+-- FAO drainage class of the soil (factor), following the FAO Guidelines for
+-- soil description:
+--   1 Very poorly drained        5 Well drained
+--   2 Poorly drained             6 Somewhat excessively drained
+--   3 Imperfectly drained        7 Excessively drained
+--   4 Moderately well drained
+--
+-- DSSAT SLDR (drainage rate, fraction per day) is taken from an explicit
+-- SoilParameterOverrides value (model 'dssat', table 'dssat_soil_site',
+-- parameter 'sldr'), else derived from DrainFAO (1: 0.01, 2: 0.05, 3: 0.25,
+-- 4: 0.40, 5: 0.60, 6: 0.75, 7: 0.85), else the ModelsDictionary default.
+-- NULL means unknown.
+--
+-- Apply only when PRAGMA table_info(Soil) confirms that the column is absent.
+-- SQLite does not support ADD COLUMN IF NOT EXISTS.
+ALTER TABLE Soil ADD COLUMN DrainFAO INTEGER CHECK (DrainFAO BETWEEN 1 AND 7);

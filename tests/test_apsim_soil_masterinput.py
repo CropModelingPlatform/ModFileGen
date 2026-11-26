@@ -78,7 +78,7 @@ def test_defaults_and_explicit_overrides(connections, tmp_path):
         md.execute('INSERT INTO Variables (model, [Table], Champ, Type, Default_Value_Datamill) VALUES (?, ?, ?, ?, ?)',
                    ('apsim', table, name, 'double', value))
     soil_id = mi.execute('SELECT IdSoil FROM Soil').fetchone()[0]
-    mi.execute('INSERT INTO SoilParameterOverrides VALUES (?, ?, ?, ?, ?)',
+    mi.execute('INSERT INTO SoilParameterOverrides (IdSoil, Model, TargetTable, Parameter, Value) VALUES (?, ?, ?, ?, ?)',
                (soil_id, 'apsim', 'Physical', 'KS', '35'))
     soil = export(connections, tmp_path)
     assert soil['Children'][0]['KS'] == [35, 35]
@@ -206,7 +206,7 @@ def test_texture_override_preserves_text(connections, tmp_path):
     # Measured texture precedes the model default.
     assert export(connections, tmp_path)['Children'][0]['Texture'] == ['sandy clay loam'] * 2
     soil_id = mi.execute('SELECT IdSoil FROM Soil').fetchone()[0]
-    mi.execute('INSERT INTO SoilParameterOverrides VALUES (?, ?, ?, ?, ?)',
+    mi.execute('INSERT INTO SoilParameterOverrides (IdSoil, Model, TargetTable, Parameter, Value) VALUES (?, ?, ?, ?, ?)',
                (soil_id, 'apsim', 'Physical', 'Texture', 'loam'))
     assert export(connections, tmp_path)['Children'][0]['Texture'] == ['loam'] * 2
 
@@ -231,7 +231,7 @@ def test_soil_cn_ratio_beats_default_and_accepts_override(connections, tmp_path)
                     if c['Name'] == 'Organic')['SoilCNRatio']
     assert ratios() == pytest.approx([15, 15])
     soil_id = mi.execute('SELECT IdSoil FROM Soil').fetchone()[0]
-    mi.execute('INSERT INTO SoilParameterOverrides VALUES (?, ?, ?, ?, ?)',
+    mi.execute('INSERT INTO SoilParameterOverrides (IdSoil, Model, TargetTable, Parameter, Value) VALUES (?, ?, ?, ?, ?)',
                (soil_id, 'apsim', 'Organic', 'SoilCNRatio', '18'))
     assert ratios() == [18, 18]
 
@@ -256,7 +256,7 @@ def test_fom_cn_ratio_uses_resolver_default_and_soil_override(connections, tmp_p
                     if c['Name'] == 'Organic')['FOMCNRatio']
     assert ratio() == 37
     soil_id = mi.execute('SELECT IdSoil FROM Soil').fetchone()[0]
-    mi.execute('INSERT INTO SoilParameterOverrides VALUES (?, ?, ?, ?, ?)',
+    mi.execute('INSERT INTO SoilParameterOverrides (IdSoil, Model, TargetTable, Parameter, Value) VALUES (?, ?, ?, ?, ?)',
                (soil_id, 'apsim', 'Organic', 'FOMCNRatio', '52'))
     assert ratio() == 52
 
@@ -267,3 +267,70 @@ def test_missing_fom_cn_ratio_fails_without_fixed_fallback(connections, tmp_path
     with pytest.raises(ValueError, match='Missing Organic.FOMCNRatio'):
         export(connections, tmp_path)
     assert not (tmp_path / 'Soil.apsimx').exists()
+
+
+def _layer_override(mi, table, name, value, layer):
+    soil_id = mi.execute('SELECT IdSoil FROM Soil').fetchone()[0]
+    mi.execute('INSERT INTO SoilParameterOverrides '
+               '(IdSoil, Model, TargetTable, Parameter, Value, NumLayer) '
+               'VALUES (?, ?, ?, ?, ?, ?)', (soil_id, 'apsim', table, name, value, layer))
+
+
+def test_layer_override_beats_profile_override_and_default(connections, tmp_path):
+    mi, md = connections
+    md.execute('INSERT INTO Variables (model, [Table], Champ, Type, Default_Value_Datamill) VALUES (?, ?, ?, ?, ?)',
+               ('apsim', 'Physical', 'KS', 'double', 12))
+    _layer_override(mi, 'Physical', 'KS', '35', 0)
+    _layer_override(mi, 'Physical', 'KS', '50', 2)
+    soil = export(connections, tmp_path)
+    assert soil['Children'][0]['KS'] == [35, 50]
+
+
+def _define(md, table, name, default):
+    md.execute('INSERT INTO Variables (model, [Table], Champ, Type, Default_Value_Datamill) VALUES (?, ?, ?, ?, ?)',
+               ('apsim', table, name, 'double', default))
+
+
+def test_layer_override_replaces_only_its_measured_layer(connections, tmp_path):
+    mi, md = connections
+    _define(md, 'Physical', 'DUL', .35)
+    _define(md, 'Physical', 'SAT', .45)
+    _layer_override(mi, 'Physical', 'DUL', '0.4', 1)
+    _layer_override(mi, 'Physical', 'SAT', '0.5', 2)
+    soil = export(connections, tmp_path)
+    physical = soil['Children'][0]
+    assert physical['DUL'] == pytest.approx([.4, .302])
+    assert physical['SAT'] == pytest.approx([.48, .5])
+
+
+def test_layer_override_beyond_soil_layers_fails(connections, tmp_path):
+    mi, md = connections
+    _define(md, 'Physical', 'DUL', .35)
+    _layer_override(mi, 'Physical', 'DUL', '0.4', 3)
+    with pytest.raises(ValueError, match='layer 3 of soil'):
+        export(connections, tmp_path)
+
+
+def test_layer_override_on_whole_soil_parameter_fails(connections, tmp_path):
+    mi, _ = connections
+    _layer_override(mi, 'Organic', 'FOMCNRatio', '30', 1)
+    with pytest.raises(ValueError, match=r"whole-soil parameter\(s\) \['fomcnratio'\]"):
+        export(connections, tmp_path)
+
+
+def test_measured_conductivity_becomes_ks_in_mm_per_day(connections, tmp_path):
+    mi, md = connections
+    _define(md, 'Physical', 'KS', 12)
+    mi.execute('UPDATE SoilLayers SET Ssks = 1 WHERE NumLayer = 1')
+    soil = export(connections, tmp_path)
+    # Layer 1: 1 cm/h = 240 mm/day; layer 2 is not measured: default.
+    assert soil['Children'][0]['KS'] == [240, 12]
+
+
+def test_soil_conductivity_is_the_layer_fallback_and_override_wins(connections, tmp_path):
+    mi, md = connections
+    _define(md, 'Physical', 'KS', 12)
+    mi.execute('UPDATE Soil SET Ssks = 0.5')
+    _layer_override(mi, 'Physical', 'KS', '99', 2)
+    soil = export(connections, tmp_path)
+    assert soil['Children'][0]['KS'] == [120, 99]
