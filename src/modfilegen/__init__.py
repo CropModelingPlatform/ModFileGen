@@ -29,11 +29,15 @@ GlobalVariables = {"storeNumMinSimu" : 0,
                     "sticsV11Executable": "",
                     "dssatExecutable": "",      # DSSAT v4.7
                     "dssatV48Executable": "",   # DSSAT v4.8
+                    "celsiusExecutable": "",    # CELSIUS v3
+                    "datamillExecutable": "",
                     "celsius_version": "v3",
                     "celsius_mode": "standard",
                     "dbCelsiusV32Template": "",
                     "celsiusV32Output": "",
-                    "celsiusV32Executable": "celsiusV32",
+                    # Empty, so modfilegen.engines runs its full cascade
+                    # (PATH, then the known install locations).
+                    "celsiusV32Executable": "",
                     "celsiusIdsim": None,
                     "runCelsiusV32": 1,
                     "outputVariablesConfig": None,

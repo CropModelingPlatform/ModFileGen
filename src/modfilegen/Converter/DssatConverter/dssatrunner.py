@@ -13,13 +13,12 @@ import os
 import subprocess
 import sys
 
-from modfilegen import GlobalVariables, engine_runner
+from modfilegen import engine_runner, engines
 
-#: Executable and batch file per DSSAT version. The names are the symlinks
-#: the AgriscaleContainer image puts on PATH.
+#: Batch file and engine registry key per DSSAT version.
 VERSIONS = {
-    "v47": {"executable": "dssat", "batch": "DSSBatch.v47", "key": "dssatExecutable"},
-    "v48": {"executable": "dssatv48", "batch": "DSSBatch.v48", "key": "dssatV48Executable"},
+    "v47": {"batch": "DSSBatch.v47", "engine": "dssat_v47"},
+    "v48": {"batch": "DSSBatch.v48", "engine": "dssat_v48"},
 }
 
 BATCH_TIMEOUT = 300
@@ -46,13 +45,12 @@ def _version(dssat_version):
 
 
 def resolve_executable(dssat_version="v47"):
-    """The configured DSSAT executable for this version, else its PATH name.
+    """Where this DSSAT version is, see :mod:`modfilegen.engines`.
 
     Call this from ``main()``, never from a worker: ``GlobalVariables`` does
     not cross the process boundary.
     """
-    version = _version(dssat_version)
-    return GlobalVariables.get(version["key"]) or version["executable"]
+    return engines.resolve(_version(dssat_version)["engine"])
 
 
 def batch_file(dssat_version="v47"):
@@ -84,14 +82,17 @@ def run_batch(
     version = _version(dssat_version)
     executable = executable or resolve_executable(dssat_version)
 
-    result = engine_runner.run_engine(
-        executable,
-        ["B", version["batch"]],
-        cwd=usmdir,
-        timeout=timeout,
-        check=check,
-        stderr=stderr,
-    )
+    try:
+        result = engine_runner.run_engine(
+            executable,
+            ["B", version["batch"]],
+            cwd=usmdir,
+            timeout=timeout,
+            check=check,
+            stderr=stderr,
+        )
+    except FileNotFoundError as error:
+        raise engines.not_found(version["engine"], executable) from error
 
     base = os.path.basename(os.path.normpath(usmdir))
     identifier = base if summary_id is None else summary_id
@@ -130,14 +131,17 @@ def run_sequence(
     version = _version(dssat_version)
     executable = executable or resolve_executable(dssat_version)
 
-    result = engine_runner.run_engine(
-        executable,
-        ["Q", version["batch"]],
-        cwd=usmdir,
-        timeout=timeout,
-        check=check,
-        stderr=sys.stderr if stderr is None else stderr,
-    )
+    try:
+        result = engine_runner.run_engine(
+            executable,
+            ["Q", version["batch"]],
+            cwd=usmdir,
+            timeout=timeout,
+            check=check,
+            stderr=sys.stderr if stderr is None else stderr,
+        )
+    except FileNotFoundError as error:
+        raise engines.not_found(version["engine"], executable) from error
 
     engine_runner.copy_output(
         usmdir, "Summary.OUT", output_dir, f"Summary_{summary_id}.OUT"

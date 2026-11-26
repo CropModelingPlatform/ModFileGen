@@ -18,7 +18,7 @@ import shutil
 from pathlib import Path
 from time import time
 import subprocess
-from modfilegen import GlobalVariables
+from modfilegen import GlobalVariables, engines
 from modfilegen.weather_coverage import keep_simulations_with_weather
 from modfilegen.coordinate_resolver import CoordinateResolver
 from modfilegen.converter import Converter
@@ -118,8 +118,12 @@ def process_chunk(*args):
 
         # use subprocess to run the celsius model with the command "celsius convert -m celsius -t ${THREADS} -dbMasterInput ${new_db_mi} -dbModelsDictionary ${DB_MD} -dbCelsius ${new_db_cel}"
         try:
+            # Resolved here rather than hard-coded, so a machine without the
+            # container layout can point at its own build.
+            datamill_executable = engines.resolve("datamill")
+            celsius_executable = engines.resolve("celsius_v3")
             print("convert celsius", flush=True)
-            result = subprocess.run(["datamill", "convert", "-m", "celsius", "-dbMasterInput", new_db_mi, "-dbModelsDictionary", DB_MD, "-dbCelsius", new_db_cel],
+            result = subprocess.run([datamill_executable, "convert", "-m", "celsius", "-dbMasterInput", new_db_mi, "-dbModelsDictionary", DB_MD, "-dbCelsius", new_db_cel],
                             check=True,
                             text=True,
                             capture_output=True)
@@ -128,7 +132,7 @@ def process_chunk(*args):
             print("✅ Celsius conversion completed successfully!", flush=True)
 
             print("run celsius")
-            subprocess.run(["celsius", "convert", "-m", "celsius", "-dbCelsius", new_db_cel], check=True,
+            subprocess.run([celsius_executable, "convert", "-m", "celsius", "-dbCelsius", new_db_cel], check=True,
                                 text=True)
             print("✅ Celsius run completed successfully!", flush=True)
             # Get in a dataframe the table "OutputSyn" from the new_db_cel database

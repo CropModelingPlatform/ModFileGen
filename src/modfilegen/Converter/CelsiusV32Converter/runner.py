@@ -11,7 +11,7 @@ import uuid
 
 import pandas as pd
 
-from modfilegen import GlobalVariables
+from modfilegen import GlobalVariables, engines
 from modfilegen.coordinate_resolver import CoordinateResolver
 from modfilegen.output_configuration import OutputConfiguration
 from modfilegen.Converter.CelsiusConverter.summary_output import (
@@ -288,12 +288,15 @@ def _merge_worker_outputs(celsius_database, worker_databases):
 def _run_worker(executable, worker_database):
     log_path = worker_database.with_suffix(".log")
     with open(log_path, "w", encoding="utf-8") as log:
-        completed = subprocess.run(
-            [executable, str(worker_database)],
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
+        try:
+            completed = subprocess.run(
+                [executable, str(worker_database)],
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+        except FileNotFoundError as error:
+            raise engines.not_found("celsius_v32", executable) from error
     return completed.returncode, log_path
 
 
@@ -305,7 +308,7 @@ def _log_tail(log_path, lines=20):
     return "\n".join(content.splitlines()[-lines:])
 
 
-def run_model(celsius_database, executable="celsiusV32", workers=1):
+def run_model(celsius_database, executable=None, workers=1):
     """Run CELSIUS V32 on a converted database, optionally in parallel.
 
     With several workers, simulations are split into contiguous parts that
@@ -314,10 +317,14 @@ def run_model(celsius_database, executable="celsiusV32", workers=1):
     outputs are merged back in simulation order.
     """
     celsius_database = Path(celsius_database)
+    executable = executable or engines.resolve("celsius_v32")
     chains = _simulation_chains(celsius_database)
     parts = _partition_chains(chains, workers) if chains else []
     if len(parts) <= 1:
-        subprocess.run([executable, str(celsius_database)], check=True, text=True)
+        try:
+            subprocess.run([executable, str(celsius_database)], check=True, text=True)
+        except FileNotFoundError as error:
+            raise engines.not_found("celsius_v32", executable) from error
         return
 
     work_dir = Path(
@@ -395,7 +402,7 @@ def run(mode):
     )
     _set_daily_output(output, int(GlobalVariables.get("dailyoutput", 0)) == 1)
     if int(GlobalVariables.get("runCelsiusV32", 1)):
-        executable = str(GlobalVariables.get("celsiusV32Executable", "celsiusV32"))
+        executable = engines.resolve("celsius_v32")
         workers = max(1, int(GlobalVariables.get("nthreads", 1) or 1))
         run_model(output, executable, workers)
         output_configuration, output_selection = _output_configuration()

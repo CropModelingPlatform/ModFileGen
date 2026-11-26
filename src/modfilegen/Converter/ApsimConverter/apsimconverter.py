@@ -11,7 +11,7 @@ Author: ModFileGen Team
 Date: 2024-2026
 """
 
-from modfilegen import GlobalVariables
+from modfilegen import GlobalVariables, engines
 from modfilegen.weather_coverage import keep_simulations_with_weather
 from modfilegen.converter import Converter
 from modfilegen.soil_repository import SoilDataRepository
@@ -706,6 +706,8 @@ def run_apsim(usmdir, apsim_path, sim_id):
         )
         print(f"  ✓ APSIM execution completed for {sim_id}")
         
+    except FileNotFoundError as error:
+        raise engines.not_found("apsim", apsim_path) from error
     except subprocess.TimeoutExpired as e:
         print(f"  ⏰ APSIM timed out for {sim_id}", file=sys.stderr, flush=True)
         raise
@@ -792,7 +794,13 @@ def main():
     nthreads = GlobalVariables.get("nthreads", 4)
     dt = GlobalVariables.get("dt", 0)
     parts = GlobalVariables.get("parts", 1)
+    # None keeps the generate-only mode: no engine is started. A name or a
+    # path becomes the real executable, so "Models" finds Models.exe on
+    # Windows. Resolved here, not in a worker: GlobalVariables does not
+    # cross the process boundary.
     apsim_path = GlobalVariables.get("apsim_path", None)
+    if apsim_path:
+        apsim_path = engines.resolve("apsim", configured=apsim_path)
     template_apsimx = GlobalVariables.get("template_apsimx", None)
     
     if not mi or not md:

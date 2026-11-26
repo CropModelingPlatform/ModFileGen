@@ -12,10 +12,9 @@ now generates 2 directly.
 
 import os
 
-from modfilegen import GlobalVariables, engine_runner
+from modfilegen import engine_runner, engines
 
-#: Where the AgriscaleContainer image installs STICS v11.
-DEFAULT_EXECUTABLE = "/opt/sticsv11/bin/stics_modulo"
+ENGINE = "stics_v11"
 
 TIMEOUT = 180
 
@@ -24,12 +23,12 @@ REPORTS = ("mod_rapport.sti", "mod_rapportA.sti", "mod_rapportP.sti")
 
 
 def resolve_executable():
-    """The configured STICS v11 executable, else the container default.
+    """Where STICS v11 is, see :mod:`modfilegen.engines` for the order.
 
     Call this from ``main()``, never from a worker: ``GlobalVariables`` does
     not cross the process boundary.
     """
-    return GlobalVariables.get("sticsV11Executable") or DEFAULT_EXECUTABLE
+    return engines.resolve(ENGINE)
 
 
 def run_stics(usmdir, output_dir, dt, dailyoutput, executable=None, timeout=TIMEOUT):
@@ -40,9 +39,12 @@ def run_stics(usmdir, output_dir, dt, dailyoutput, executable=None, timeout=TIME
     launch did.
     """
     executable = executable or resolve_executable()
-    result = engine_runner.run_engine(
-        executable, cwd=usmdir, timeout=timeout
-    )
+    try:
+        result = engine_runner.run_engine(
+            executable, cwd=usmdir, timeout=timeout
+        )
+    except FileNotFoundError as error:
+        raise engines.not_found(ENGINE, executable) from error
 
     base = os.path.basename(os.path.normpath(usmdir))
     for report in REPORTS:
