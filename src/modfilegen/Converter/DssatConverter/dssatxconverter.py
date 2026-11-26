@@ -1039,7 +1039,7 @@ def writeBlockHarvest(dssat_tableName, idSim, dssat_tableId, modelDictionary_Con
 
 
 
-def writeBlockEndFile( idSim, modelDictionary_Connection, master_input_connection, dailyoutput):
+def writeBlockEndFile( idSim, modelDictionary_Connection, master_input_connection, dailyoutput, method_overrides=None):
     fileContent = ""
     storeKeyDataN = 0
     storeNumMaxSimu = 1
@@ -1064,7 +1064,10 @@ def writeBlockEndFile( idSim, modelDictionary_Connection, master_input_connectio
         dssat_tableName1 = "dssat_x_simulation_option"
         fileContent += writeBlockOption(dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection, master_input_connection)
         dssat_tableName1 = "dssat_x_simulation_method"
-        fileContent += writeBlockMethod(dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection)
+        fileContent += writeBlockMethod(
+            dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection,
+            method_overrides,
+        )
         dssat_tableName1 = "dssat_x_simulation_management"
         fileContent += writeBlockManagement(dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection)
         dssat_tableName1 = "dssat_x_simulation_outputs"
@@ -1175,50 +1178,80 @@ def writeBlockOption(dssat_tableName, dssat_tableId, idSim, modelDictionary_Conn
 
 
 
-def writeBlockMethod(dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection):
+#: Tables whose values a user may override per crop-season. Only the
+#: simulation methods today; the other SIMULATION CONTROLS sub-blocks follow
+#: the same route when they are needed.
+OVERRIDABLE_TABLES = ("dssat_x_simulation_method",)
+
+
+def simulation_overrides(parameter_resolver, idMangt, season_order, plant_order):
+    """Per-crop-season overrides for the simulation methods, or None.
+
+    Resolved in the parent process: a loky worker re-imports the package and
+    would see only the model defaults.
+    """
+    if parameter_resolver is None:
+        return None
+    try:
+        return parameter_resolver.resolve_management(
+            "dssat", "dssat_x_simulation_method", idMangt,
+            season_order, plant_order,
+        )
+    except RuntimeError:
+        # Not prefetched for this table: the caller did not ask for
+        # overrides, so the dictionary defaults stand.
+        return None
+
+
+def dictionary_or_override(DT, overrides, champ):
+    """The value for ``champ``: the caller's override, else the default.
+
+    Overrides are keyed per crop-season, which is what DSSAT needs: MEPHO is
+    R for a CERES maize and C or L for a CROPGRO peanut, and a rotation
+    carries both. Any field of the table can be overridden -- which one is
+    the user's decision, recorded in CropManagementParameterOverrides.
+    """
+    if overrides:
+        value = overrides.get(champ.casefold())
+        if value is not None:
+            return value
+    return DT[DT["Champ"] == champ]["dv"].values[0]
+
+
+def writeBlockMethod(
+    dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection,
+    overrides=None,
+):
     fileContent = ""
     siteColumnsHeader = "@N METHODS     WTHER INCON LIGHT EVAPO INFIL PHOTO HYDRO NSWIT MESOM MESEV MESOL"
     dssat_queryRead = "Select Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'dssat') And ([Table] = '%s'));"%(dssat_tableName)
     DT = pd.read_sql_query(dssat_queryRead, modelDictionary_Connection)
     fileContent += siteColumnsHeader + "\n"
-    rw = DT[DT["Champ"] == "LNSIM"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "LNSIM")
     fileContent += v_fmt_simulation["N"].format(float(Dv))
-    rw = DT[DT["Champ"] == "TITMET"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "TITMET")
     fileContent += v_fmt_simulation["METHODS"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "MEWTH"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "MEWTH")
     fileContent += v_fmt_simulation["WTHER"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "MESIC"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "MESIC")
     fileContent += v_fmt_simulation["INCON"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "MELI"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "MELI")
     fileContent += v_fmt_simulation["LIGHT"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "MEEVP"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "MEEVP")
     fileContent += v_fmt_simulation["EVAPO"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "MEINF"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "MEINF")
     fileContent += v_fmt_simulation["INFIL"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "MEPHO"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "MEPHO")
     fileContent += v_fmt_simulation["PHOTO"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "HYDRO"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "HYDRO")
     fileContent += v_fmt_simulation["HYDRO"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "NSWIT"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "NSWIT")
     fileContent += v_fmt_simulation["NSWIT"].format(int(Dv))
-    rw = DT[DT["Champ"] == "MESOM"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "MESOM")
     fileContent += v_fmt_simulation["MESOM"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "MESEV"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "MESEV")
     fileContent += v_fmt_simulation["MESEV"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "MESOL"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "MESOL")
     fileContent += v_fmt_simulation["MESOL"].format(int(Dv)) + "\n"
     return fileContent
 
@@ -1516,6 +1549,8 @@ class DssatXConverter(Converter):
         dailyoutput,
         dssat_version="v47",
         parameter_resolver=None,
+        season_order=1,
+        plant_order=1,
     ):
         ST = path_parts(directory_path)
         idSim = ST[-2]
@@ -1676,7 +1711,13 @@ class DssatXConverter(Converter):
         # SIMULATION CONTROLS
         fileContent += "\n"
         fileContent += "*SIMULATION CONTROLS\n"
-        fileContent += writeBlockEndFile(idSim, modelDictionary_Connection, master_input_connection, dailyoutput)
+        fileContent += writeBlockEndFile(
+            idSim, modelDictionary_Connection, master_input_connection,
+            dailyoutput,
+            simulation_overrides(
+                parameter_resolver, idMangt, season_order, plant_order
+            ),
+        )
         
         try:
             # Export file to specified directory

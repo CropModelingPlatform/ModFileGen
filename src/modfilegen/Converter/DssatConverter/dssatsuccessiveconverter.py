@@ -636,7 +636,7 @@ def season_connection(source_connection, simunit_row, management):
     return configure_season_connection(connection, simunit_row, management)
 
 
-def treatment_line(rotation, model_dictionary_connection, master_input_connection, sections):
+def treatment_line(rotation, model_dictionary_connection, master_input_connection, sections, sm=1):
     row = rotation.row
     fmt = dssatxconverter.v_fmt_treat
     flags = management_flags(row["idsim"], master_input_connection, rotation.management)
@@ -664,7 +664,8 @@ def treatment_line(rotation, model_dictionary_connection, master_input_connectio
         "MT": rotation.index if int(flags["NumTillOperations"]) != 0 and section_has_data(sections, "*TILLAGE") else 0,
         "ME": 0,
         "MH": rotation.index if section_has_data(sections, "*HARVEST") else 0,
-        "SM": 1,
+        # Which SIMULATION CONTROLS block governs this crop-season.
+        "SM": sm,
     }
     line = ""
     line += fmt["N"].format(values["N"])
@@ -718,16 +719,57 @@ def replace_sim_control_id(line, rotation_index, nyers, sequence_start):
     return line
 
 
-def merge_simulation_controls(rotations, nyers, sequence_start):
-    output = ["*SIMULATION CONTROLS"]
+def simulation_control_blocks(rotations, nyers, sequence_start):
+    """One block per distinct set of controls, and each rotation's number.
+
+    DSSAT numbers a whole ``SIMULATION CONTROLS`` block at once: GENERAL,
+    OPTIONS, METHODS, MANAGEMENT, OUTPUTS and AUTOMATIC MANAGEMENT all carry
+    the same number, and a treatment's ``SM`` column points at it. So two
+    crop-seasons needing one different value -- MEPHO is ``R`` for a CERES
+    maize and ``C`` or ``L`` for a CROPGRO peanut -- need two blocks.
+
+    DSSAT's own UFGA7803.SQX does exactly this: four treatments, two blocks,
+    soybean and dry bean sharing the first and both fallows the second. So
+    blocks are shared by whatever matches, which is why these are grouped
+    rather than emitted one per rotation.
+
+    Blocks are compared as they will be *written*, not as they were
+    generated: emission rewrites the block number, and NYERS and SDATE on
+    the GENERAL line, so every rotation carries its own start date in the
+    source and all three differed on a field about to be overwritten. The
+    first attempt at this grouped nothing for exactly that reason.
+    """
+    blocks = []
+    numbers = {}
     for rotation in rotations:
         section = rotation.sections.get("*SIMULATION")
         if not section:
-            raise ValueError(f"Missing *SIMULATION CONTROLS for {rotation.row['idsim']}")
-        for line in split_section_body(section):
-            if not line.strip():
-                continue
-            output.append(replace_sim_control_id(line, rotation.index, nyers, sequence_start))
+            raise ValueError(
+                f"Missing *SIMULATION CONTROLS for {rotation.row['idsim']}"
+            )
+        body = [line for line in split_section_body(section) if line.strip()]
+        signature = tuple(
+            replace_sim_control_id(line, 0, nyers, sequence_start)
+            for line in body
+        )
+        for number, (known, _) in enumerate(blocks, start=1):
+            if known == signature:
+                numbers[rotation.index] = number
+                break
+        else:
+            blocks.append((signature, body))
+            numbers[rotation.index] = len(blocks)
+    return [body for _, body in blocks], numbers
+
+
+def merge_simulation_controls(rotations, nyers, sequence_start):
+    blocks, _ = simulation_control_blocks(rotations, nyers, sequence_start)
+    output = ["*SIMULATION CONTROLS"]
+    for number, body in enumerate(blocks, start=1):
+        for line in body:
+            output.append(
+                replace_sim_control_id(line, number, nyers, sequence_start)
+            )
         output.append("")
     return output
 
@@ -742,8 +784,14 @@ def build_sequence_file(rotations, model_dictionary_connection, master_input_con
 
     lines.append("*TREATMENTS                        -------------FACTOR LEVELS------------")
     lines.append("@N R O C TNAME.................... CU FL SA IC MP MI MF MR MC MT ME MH SM")
+    # Grouped before the treatments are written: SM has to name the block
+    # this crop-season's controls ended up in.
+    _, sm_numbers = simulation_control_blocks(rotations, nyers, sequence_start)
     for rotation in rotations:
-        lines.append(treatment_line(rotation, model_dictionary_connection, master_input_connection, rotation.sections))
+        lines.append(treatment_line(
+            rotation, model_dictionary_connection, master_input_connection,
+            rotation.sections, sm_numbers[rotation.index],
+        ))
     lines.append("")
 
     for section in ("*CULTIVARS",):
@@ -768,7 +816,7 @@ def build_sequence_file(rotations, model_dictionary_connection, master_input_con
             lines.extend(merged)
             lines.append("")
 
-    lines.extend(merge_simulation_controls(rotations[:1], nyers, sequence_start))
+    lines.extend(merge_simulation_controls(rotations, nyers, sequence_start))
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -830,6 +878,12 @@ def generate_rotation_input(
         context["dailyoutput"],
         context["dssat_version"],
         context["parameter_resolver"],
+        # The season is what distinguishes one crop of a rotation from the
+        # next, and so which overrides apply. It comes from the management,
+        # not from season_row: that one is a copy of the SimUnitList row and
+        # carries no SeasonOrder at all.
+        management.get("SeasonOrder", 1),
+        management.get("PlantOrder", 1),
     )
 
     sections = parse_sections(read_generated_xfile(single_dir))
@@ -911,6 +965,14 @@ def prefetch_soil_services(context, rows, coordinate_resolver):
     )
     context["parameter_resolver"].prefetch(
         "dssat", dssatsoilconverter.PARAMETER_TABLES, soil_ids
+    )
+    # Per-crop-season overrides of the simulation controls. Prefetched here,
+    # with the soils, because a worker re-imports the package and would see
+    # only the model defaults.
+    context["parameter_resolver"].prefetch_management(
+        "dssat",
+        dssatxconverter.OVERRIDABLE_TABLES,
+        {row["idMangt"] for row in rows},
     )
     coordinate_resolver.prefetch({row["idPoint"] for row in rows})
     context["coordinate_resolver"] = coordinate_resolver

@@ -153,3 +153,75 @@ def test_the_survey_groups_declines_by_reason(connection):
     assert len(reasons) == 2
     assert any("association" in reason for reason in reasons)
     assert any("rotation" in reason for reason in reasons)
+
+
+# --- per-crop-season overrides of the simulation controls -----------------
+
+
+def test_any_field_of_the_methods_table_can_be_overridden(connection):
+    """The user decides which field they need, not the code.
+
+    MEPHO is the case that prompted this -- R is a CERES method and CROPGRO
+    has only C and L -- but nothing here is specific to it.
+    """
+    import pandas as pd
+
+    from modfilegen.Converter.DssatConverter.dssatxconverter import (
+        dictionary_or_override,
+    )
+
+    DT = pd.DataFrame({"Champ": ["MEPHO", "MEEVP"], "dv": ["R", "R"]})
+
+    assert dictionary_or_override(DT, None, "MEPHO") == "R"
+    assert dictionary_or_override(DT, {}, "MEPHO") == "R"
+    assert dictionary_or_override(DT, {"mepho": "L"}, "MEPHO") == "L"
+    # An override of one field leaves the others on their default.
+    assert dictionary_or_override(DT, {"mepho": "L"}, "MEEVP") == "R"
+
+
+def test_an_override_reaches_the_crop_season_that_asked_for_it(connection):
+    """The existing CropManagementParameterOverrides table, unchanged:
+    (idMangt, SeasonOrder, PlantOrder) is already per crop-season."""
+    from modfilegen.Converter.DssatConverter import dssatxconverter
+    from modfilegen.parameter_resolver import ParameterResolver
+
+    connection.execute(
+        "INSERT OR REPLACE INTO CropManagementParameterOverrides"
+        " (idMangt, SeasonOrder, PlantOrder, Model, TargetTable, Parameter,"
+        "  Value) VALUES (?,?,?,?,?,?,?)",
+        ("ROT_MAIZE_PEANUT_3Y", 2, 1, "dssat", "dssat_x_simulation_method",
+         "MEPHO", "L"),
+    )
+    connection.commit()
+
+    import sqlite3
+    dictionary = sqlite3.connect(":memory:")
+    dictionary.execute(
+        "CREATE TABLE Variables (model TEXT, [Table] TEXT, Champ TEXT,"
+        " Default_Value_Datamill TEXT, defaultValueOtherSource TEXT,"
+        " Minnval TEXT, Maxval TEXT, Type TEXT)"
+    )
+    dictionary.execute(
+        "INSERT INTO Variables VALUES"
+        " ('dssat','dssat_x_simulation_method','MEPHO','R',NULL,NULL,NULL,'text')"
+    )
+    resolver = ParameterResolver(dictionary, connection)
+    resolver.prefetch_management(
+        "dssat", dssatxconverter.OVERRIDABLE_TABLES, ["ROT_MAIZE_PEANUT_3Y"]
+    )
+
+    seasons = [
+        dssatxconverter.simulation_overrides(
+            resolver, "ROT_MAIZE_PEANUT_3Y", season, 1
+        )["mepho"]
+        for season in (1, 2, 3)
+    ]
+    dictionary.close()
+
+    assert seasons == ["R", "L", "R"]
+
+
+def test_without_a_resolver_the_defaults_stand(connection):
+    from modfilegen.Converter.DssatConverter import dssatxconverter
+
+    assert dssatxconverter.simulation_overrides(None, "any", 1, 1) is None

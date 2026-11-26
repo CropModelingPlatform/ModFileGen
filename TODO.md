@@ -119,16 +119,35 @@ and linked to an issue or pull request when one exists.
   killing the whole `Parallel` call on the first one. Give STICS the same
   survey hook, so its runs are reconciled too: it declines nothing today, but
   the count would have caught the `eaures` defect.
-- [ ] The rotation fails inside DSSAT v4.8 itself, exit 99, on its peanut
-  season: `ERROR.OUT` gives error 100, key `DEMAND`, for `CRGRO048`. The
-  genotype chain is sound (`IB0001` resolves to ecotype `PN0007`, present in
-  `PNGRO048.ECO`, and both crops' files are copied into the sequence
-  directory). The suspect is the simulation options, written the same for
-  every crop: `NITRO` comes from `SimUnitList.StressN_YN` (off in the
-  fixture) and `SYMBI` from the dictionary field `ISWSYM`, a constant `N`. A
-  legume under CROPGRO is the one case where symbiotic fixation matters, so a
-  blanket `N` is suspect. Needs an agronomic decision: make `ISWSYM` depend
-  on the crop, or set it per simulation.
+- [x] A crop-season can carry its own simulation controls. DSSAT numbers a
+  whole `SIMULATION CONTROLS` block at once and a treatment's `SM` column
+  points at it, so two crop-seasons needing one different value need two
+  blocks -- as DSSAT's own `UFGA7803.SQX` does, four treatments over two
+  blocks with `PHOTO` `L` and `C`. The writer emitted the first rotation's
+  block only and hard-coded `SM` to 1. It now groups the rotations by the
+  controls they will actually be written with and numbers one block per
+  distinct set, so identical controls still produce exactly one block and
+  the generated file is byte-identical to before. No schema change: the
+  existing `CropManagementParameterOverrides`, keyed by
+  `(idMangt, SeasonOrder, PlantOrder)`, is already per crop-season, and any
+  field of `dssat_x_simulation_method` can be overridden -- which one is the
+  user's decision. Verified: an override of `MEPHO` on season 2 yields two
+  blocks with `PHOTO R` and `PHOTO L` and `SM` = 1, 2, 1.
+- [ ] Several `SIMULATION CONTROLS` blocks require an `@  AUTOMATIC
+  MANAGEMENT` section per block, even when no `MANAGEMENT` switch is `A`.
+  With one block DSSAT tolerates its absence; with two it fails reading the
+  file, error 5010 key `IPSIM` at the second block's `GENERAL` line. Adding
+  the section to each level by hand made that error disappear, so the writer
+  must emit it per level regardless of the switches. Until then a run with
+  two distinct control blocks cannot start.
+- [ ] The rotation's peanut season fails inside DSSAT v4.8, error 100 key
+  `DEMAND` for `CRGRO048`, and `MEPHO` is not the cause. Tested with the
+  override in place: `R`, `C` and `L` all give `DEMAND`, as do `SYMBI = Y`
+  and `NITRO = Y` together with it. The genotype chain is sound (`IB0001`
+  resolves to ecotype `PN0007`, present in `PNGRO048.ECO`, and both crops'
+  files are copied into the sequence directory). Still to look at: the
+  planting details and harvest written for season 2, and whether `PNGRO048`
+  needs species files beyond `.CUL`, `.ECO` and `.SPE`.
 - [ ] DSSAT leaves `chunk_0.csv` in the output directory rather than in the
   scratch directory; it is an intermediate, and it shows up in the manifest.
 - [ ] Decide whether the summary CSV should keep its `uuid4` prefix. It

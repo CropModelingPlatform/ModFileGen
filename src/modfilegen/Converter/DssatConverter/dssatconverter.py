@@ -242,6 +242,11 @@ def process_chunk(*args):
     soil_repository.prefetch(soil_ids)
     parameter_resolver = ParameterResolver(ModelDictionary_Connection, MasterInput_Connection)
     parameter_resolver.prefetch("dssat", dssatsoilconverter.PARAMETER_TABLES, soil_ids)
+    parameter_resolver.prefetch_management(
+        "dssat",
+        dssatxconverter.OVERRIDABLE_TABLES,
+        {row["idMangt"] for row in chunk},
+    )
         
     for i, row in enumerate(chunk):
         write_header = not os.path.exists(tmp_csv)
