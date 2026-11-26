@@ -89,6 +89,33 @@ and linked to an issue or pull request when one exists.
   `sticsv11`/`fictec1`, so any management supplying organic residues died in
   `FormatSticsRawData` with a bare numpy IndexError. It now raises a KeyError
   naming the parameter and the table.
+- [x] The fixture also runs under DSSAT v4.8: exit 0, 2 `SummaryOutput` rows
+  for the two single-crop simulations, and the three association simulations
+  refused by name. Three defects were in the way. `ListCultivars
+  .IdcultivarDssat` was NULL for both test cultivars, so every DSSAT run died
+  formatting `INGENO`; the cultivar converter copies the genotype files
+  without adding a line, so the code has to exist in the `.CUL` already.
+  `ListCultOption.DSCROP` was empty for the peanut. And standard DSSAT had no
+  association check at all, unlike the successive converter: it took whichever
+  plant row came back first and wrote a single-crop simulation from an
+  intercrop, dropping a crop with no message.
+- [ ] `writeBlockResidues` was asking numpy for the truth of a whole column
+  (`if dataTable["idresidueDssat"].values:`), which works with one residue
+  row and raises with two, so no management applying organic matter twice
+  could be converted. Fixed to test the row being written. Worth sweeping the
+  DSSAT converters for the same shape: this one was the only `.values :`
+  spelling, but `.values[0]` on a multi-row frame is the same class of bug and
+  standard mode reads every season of a rotation management.
+- [ ] `agriscale run` returns 0 when individual simulations fail. The
+  converters catch a per-simulation exception, print it to stderr and carry
+  on, so 3 of 5 simulations can be skipped and the command still reports
+  success. For DSSAT the three skipped ones are legitimately not applicable
+  (associations), but a real defect would look identical. The converters need
+  to report how many simulations ran against how many were requested, and
+  `agriscale run` should fail when the two differ for any reason other than a
+  documented exclusion. This is what CI will depend on.
+- [ ] DSSAT leaves `chunk_0.csv` in the output directory rather than in the
+  scratch directory; it is an intermediate, and it shows up in the manifest.
 - [ ] Decide whether the summary CSV should keep its `uuid4` prefix. It
   prevents collisions between parallel and repeated runs, but makes the file
   name differ between two runs of the same inputs; `agriscale run --manifest`

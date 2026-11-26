@@ -27,6 +27,39 @@ def cultivar_code_for_version(dscrop, dssat_version):
     base_dscrop = re.sub(r"(?:047|048)$", "", str(dscrop).strip())
     return base_dscrop + suffix
 
+#: One plant per season. DSSAT simulates a single crop at a time: it has no
+#: two-layer canopy, so an association cannot be represented at all. The
+#: successive converter already refuses one; this is the standard path.
+_PLANTS_PER_SEASON = """
+    SELECT SeasonOrder, COUNT(DISTINCT PlantOrder) AS plants
+    FROM CropManagement
+    WHERE idMangt = ?
+    GROUP BY SeasonOrder
+    HAVING plants > 1
+"""
+
+
+def reject_an_association(idMangt, master_input_connection):
+    """Refuse a management that grows two crops at once.
+
+    Without this the converter took whichever plant row came back first and
+    wrote a single-crop simulation from it, dropping the other crop with no
+    message: a plausible result that answers a different question from the
+    one asked.
+    """
+    crowded = master_input_connection.execute(
+        _PLANTS_PER_SEASON, (idMangt,)
+    ).fetchall()
+    if not crowded:
+        return
+    seasons = ", ".join(str(row[0]) for row in crowded)
+    raise ValueError(
+        f"DSSAT cannot simulate an association: management {idMangt!r} has "
+        f"several plants in season(s) {seasons}. DSSAT grows one crop at a "
+        "time; use STICS for intercropping."
+    )
+
+
 class DssatCultivarConverter(Converter):
     def __init__(self):
         super().__init__()
@@ -35,6 +68,7 @@ class DssatCultivarConverter(Converter):
         ST = path_parts(directory_path)   
         sq = """SELECT CropManagement.idMangt as idMangt, ListCultOption.CG as crop, ListCultOption.DSCROP as dscrop 
         FROM (ListCultOption INNER JOIN (ListCultivars INNER JOIN CropManagement ON ListCultivars.IdCultivar = CropManagement.Idcultivar) ON ListCultOption.CodePSpecies = ListCultivars.CodePSpecies) where idMangt= '%s' ;"""%(ST[-1])   
+        reject_an_association(ST[-1], master_input_connection)
         df_sim = pd.read_sql(sq, master_input_connection)
         rows = df_sim.to_dict('records')
 

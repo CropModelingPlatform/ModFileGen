@@ -815,8 +815,15 @@ def writeBlockResidues(dssat_tableName, idSim, dssat_tableId, modelDictionary_Co
         ifert = int(dataTable["sowingdate"].values[i] + dataTable["Dferti"].values[i])
         if dataTable["Dferti"].values[i] == 0: ifert += 1
         fileContent += v_fmt_residues["RDATE"].format(format_dssat_yyddd(dataTable["StartYear"].values[i], ifert))
-        if dataTable["idresidueDssat"].values : fileContent += v_fmt_residues["RCOD"].format(dataTable["idresidueDssat"].values[i])
-        else: fileContent += format(" ", "6s")
+        # This row's code, not the whole column: `if column.values:` asks
+        # numpy for the truth of an array, which happens to work with a
+        # single residue and raises with two -- so any management applying
+        # organic matter twice could not be converted at all.
+        residue_code = dataTable["idresidueDssat"].values[i]
+        if pd.notna(residue_code) and str(residue_code).strip():
+            fileContent += v_fmt_residues["RCOD"].format(residue_code)
+        else:
+            fileContent += format(" ", "6s")
         fileContent += v_fmt_residues["RAMT"].format(dataTable["Qmanure"].values[i])
         fileContent += v_fmt_residues["RESN"].format(round(100 * dataTable["NFerti"].values[i], 2))
         fileContent += v_fmt_residues["RESP"].format(round(100 * dataTable["PFerti"].values[i], 2))
