@@ -7,7 +7,7 @@ name = "modfilegen"
 dynamic = ["version"]
 description = "Generate and run model input files for different crop models based on a standardized shared database"
 readme = "README.rst"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = "MIT"
 authors = [
     {name = "Cyrille Ahmed Midingoyi", email = "cyrille_ahmed.midingoyi@cirad.fr"},
@@ -20,11 +20,12 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Operating System :: OS Independent",
@@ -48,6 +49,9 @@ xlsx = [
 ]
 dev = [
     "pytest>=7.0",
+    # uv does not seed setuptools into a venv, and one test builds the
+    # project metadata to check it survives a non-UTF-8 locale.
+    "setuptools>=61",
     "pytest-cov",
     "pytest-mock",
     "openpyxl>=3.1",

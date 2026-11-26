@@ -193,6 +193,11 @@ def test_setup_py_reads_its_metadata_on_a_non_utf8_locale():
     root = Path(text_files.__file__).resolve().parents[2]
     if not (root / "setup.py").exists():
         pytest.skip("not running from a source checkout")
+    # setup.py imports setuptools on line 11, before reading README on line
+    # 16, so without setuptools this would pass without testing anything.
+    # uv does not seed it into a virtual environment; `pip install -e
+    # ".[dev]"` brings it in.
+    pytest.importorskip("setuptools")
 
     environment = dict(os.environ)
     environment.update(
