@@ -143,6 +143,10 @@ and linked to an issue or pull request when one exists.
   simulation's year as if they were days -- `005161`, six digits in a
   six-wide field, so the two dates ran together. Only the day is kept now,
   and the line matches the official example column for column.
+- [x] The fixture carries one parameter override per model, so the generic
+  per-crop-season route is exercised by default rather than by hand:
+  `sticsv11.fictec1.codecalirrig` on season 3 and
+  `dssat.dssat_x_simulation_method.MEPHO` = `L` on season 2, the peanut.
 - [ ] The automatic harvest window carries each season's own end date
   (`HLAST`), so a rotation gets one control block per season even when
   nothing else differs. That is what the data says and DSSAT accepts it, but

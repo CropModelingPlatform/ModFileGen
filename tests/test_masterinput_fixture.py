@@ -85,3 +85,46 @@ def test_modelsdictionary_holds_only_the_variables_table(modelsdictionary_db):
             row[0] for row in connection.execute("SELECT DISTINCT model FROM Variables")
         }
     assert {"master", "stics", "sticsv11", "dssat", "celsius"} <= models
+
+
+def test_the_fixture_carries_one_override_per_model(masterinput_db):
+    """The fixture exercises the generic override route for both models.
+
+    `(idMangt, SeasonOrder, PlantOrder)` is per crop-season, so the rotation
+    can give its peanut season a MEPHO of its own -- DSSAT's photosynthesis
+    method is R for a CERES maize and C or L for a CROPGRO legume, and the
+    two cannot share one SIMULATION CONTROLS block. Without a row in the
+    fixture, that path is only ever reached by hand.
+    """
+    with sqlite3.connect(masterinput_db) as connection:
+        overrides = {
+            (row[0], row[1], row[2], row[3], row[4]): row[5]
+            for row in connection.execute(
+                "SELECT Model, idMangt, SeasonOrder, TargetTable, Parameter,"
+                " Value FROM CropManagementParameterOverrides"
+            )
+        }
+
+    assert overrides[
+        ("sticsv11", "ROT_MAIZE_PEANUT_3Y", 3, "fictec1", "codecalirrig")
+    ] == "1"
+    assert overrides[
+        ("dssat", "ROT_MAIZE_PEANUT_3Y", 2, "dssat_x_simulation_method", "MEPHO")
+    ] == "L"
+
+
+def test_the_overridden_season_is_the_one_that_grows_the_legume(masterinput_db):
+    """A MEPHO of L on a maize season would be wrong, not just useless."""
+    with sqlite3.connect(masterinput_db) as connection:
+        season, = connection.execute(
+            "SELECT SeasonOrder FROM CropManagementParameterOverrides"
+            " WHERE lower(Model) = 'dssat' AND Parameter = 'MEPHO'"
+        ).fetchone()
+        species, = connection.execute(
+            "SELECT l.SpeciesName FROM CropManagement c"
+            " JOIN ListCultivars l ON l.IdCultivar = c.Idcultivar"
+            " WHERE c.idMangt = 'ROT_MAIZE_PEANUT_3Y' AND c.SeasonOrder = ?",
+            (season,),
+        ).fetchone()
+
+    assert species == "peanut"

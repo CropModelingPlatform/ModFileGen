@@ -1,2 +1,3 @@
 idMangt,SeasonOrder,PlantOrder,Model,TargetTable,Parameter,Value
 ROT_MAIZE_PEANUT_3Y,3,1,sticsv11,fictec1,codecalirrig,1
+ROT_MAIZE_PEANUT_3Y,2,1,dssat,dssat_x_simulation_method,MEPHO,L
