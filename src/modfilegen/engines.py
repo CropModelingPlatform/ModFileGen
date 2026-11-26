@@ -25,7 +25,14 @@ import shutil
 import sys
 from pathlib import Path
 
-__all__ = ["ENGINES", "resolve", "not_found", "describe"]
+__all__ = [
+    "ENGINES",
+    "resolve",
+    "not_found",
+    "describe",
+    "guidance",
+    "set_variable",
+]
 
 #: Where a portable, no-administrator install unpacks the engines.
 PORTABLE_ROOT = Path.home() / ".modfilegen" / "engines"
@@ -245,13 +252,45 @@ def inspect(name, configured=None):
     }
 
 
-def describe(name):
-    """How to tell ModFileGen where this engine is. For error messages."""
-    engine = ENGINES[name]
-    lines = [
-        f"Set GlobalVariables[{engine.config_key!r}] to its full path,",
-        f"or export {engine.env_var}=/path/to/the/executable.",
+def _example_path():
+    """What a path looks like, in the spelling of the platform talked to.
+
+    A function, not a constant: a module-level value would be fixed at
+    import and no test could ask what the other platform's message says.
+    """
+    if _WINDOWS:
+        return r"C:\path\to\the\executable.exe"
+    return "/path/to/the/executable"
+
+
+def set_variable(env_var):
+    """Shell lines that set ``env_var``, in this platform's own syntax.
+
+    "export VAR=/path/to/it" is wrong twice over on Windows: cmd.exe has no
+    export, and the path spelling is not its own. A student followed that
+    advice literally -- ``set export VAR=...``, which defines a variable
+    called "export VAR" -- and got the same message back unchanged. Telling
+    someone to run a line that cannot work is worse than saying nothing, so
+    the guidance speaks the shell of the machine it is printed on.
+    """
+    if not _WINDOWS:
+        return [f"export {env_var}={_example_path()}"]
+    # Quoting the whole assignment keeps a stray trailing space out of the
+    # value, which is cmd.exe's classic way of silently doing nothing. setx
+    # writes to the user's own profile, so it needs no administrator rights,
+    # but it only reaches windows opened afterwards.
+    return [
+        f'cmd:        set "{env_var}={_example_path()}"   (this window only)',
+        f'            setx {env_var} "{_example_path()}"  (lasting, new windows)',
+        f'PowerShell: $env:{env_var} = "{_example_path()}"',
     ]
+
+
+def guidance(name):
+    """How to tell ModFileGen where engine ``name`` is, as separate lines."""
+    engine = ENGINES[name]
+    lines = [f"Set GlobalVariables[{engine.config_key!r}] to its full path, or:"]
+    lines += set_variable(engine.env_var)
     if engine.commands:
         lines.append(
             "It is also found automatically when "
@@ -262,7 +301,12 @@ def describe(name):
         f"A portable copy is picked up under {PORTABLE_ROOT / '<engine>'}, "
         "which needs no administrator rights."
     )
-    return " ".join(lines)
+    return lines
+
+
+def describe(name):
+    """The same guidance as one string, for a single-line error message."""
+    return " ".join(line.strip() for line in guidance(name))
 
 
 def not_found(name, executable):

@@ -58,23 +58,28 @@ def engines_report(stream=None, as_json=False):
         stream.write("\nAll engines are in place.\n")
         return 0
 
-    stream.write("\n")
     for finding in problems:
-        stream.write(f"{finding['label']}: ")
+        status = STATUS_TEXT.get(finding["status"], finding["status"])
+        stream.write(f"\n{finding['label']} -- {status}\n")
         if finding["status"] == "missing":
-            stream.write("not found. " + engines.describe(finding["engine"]) + "\n")
+            # One line per shell, not one paragraph: eight engines of wrapped
+            # prose is a wall, and the line to run has to be copyable.
+            lines = engines.guidance(finding["engine"])
         elif finding["status"] == "incomplete":
             missing = ", ".join(finding["missing_companions"])
-            stream.write(
-                f"found at {finding['executable']}, but {missing} is not beside "
-                "it. Point at the executable inside the engine's own install "
-                "directory rather than at a copy of the binary.\n"
-            )
+            lines = [
+                f"found at {finding['executable']},",
+                f"but {missing} is not beside it. Point at the executable",
+                "inside the engine's own install directory rather than at a",
+                "copy of the binary.",
+            ]
         else:
-            stream.write(
-                f"{finding['executable']} is not executable. "
-                "chmod +x it, or point at the right file.\n"
-            )
+            lines = [
+                f"{finding['executable']} is not executable.",
+                "chmod +x it, or point at the right file.",
+            ]
+        for line in lines:
+            stream.write(f"  {line}\n")
     # Missing engines are a normal state: file generation needs none of them.
     return 0
 

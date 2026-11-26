@@ -222,6 +222,39 @@ def test_the_guidance_names_the_key_and_the_variable(name):
     assert engine.env_var in message
 
 
+def test_the_guidance_speaks_the_shell_of_the_machine(monkeypatch):
+    """A student ran the Unix line on cmd.exe because the message said to.
+
+    `set export VAR=...` defines a variable called "export VAR", so nothing
+    is found and the message that caused it is printed again unchanged.
+    """
+    monkeypatch.setattr(engines, "_WINDOWS", True)
+
+    message = engines.describe("stics_v11")
+
+    assert "export" not in message
+    assert 'set "MODFILEGEN_STICS_V11=' in message
+    assert "/path/to" not in message
+
+
+def test_the_windows_guidance_offers_a_lasting_setting(monkeypatch):
+    """setx needs no administrator rights, which is the whole constraint."""
+    monkeypatch.setattr(engines, "_WINDOWS", True)
+
+    message = engines.describe("stics_v11")
+
+    assert "setx MODFILEGEN_STICS_V11" in message
+
+
+def test_the_posix_guidance_stays_posix(monkeypatch):
+    monkeypatch.setattr(engines, "_WINDOWS", False)
+
+    message = engines.describe("stics_v11")
+
+    assert "export MODFILEGEN_STICS_V11=" in message
+    assert "setx" not in message
+
+
 @pytest.mark.parametrize("name", sorted(engines.ENGINES))
 def test_not_found_is_a_file_error_that_says_what_to_do(name):
     error = engines.not_found(name, "whatever")
