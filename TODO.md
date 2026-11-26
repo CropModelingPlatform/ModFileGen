@@ -171,6 +171,22 @@ and linked to an issue or pull request when one exists.
   fixture's eleven-day gap worked through -- season 2 irrigates ten days
   before sowing, so season 1 closes eleven days before it, which is
   invisible unless someone goes looking.
+- [x] DSSAT writes the irrigations the database declares. The block was
+  written from the ModelsDictionary alone -- one line carrying `IDLAPL`,
+  `IRRCOD` and `IIRV`, which are template defaults -- so the fixture's three
+  irrigations of 20, 30 and 30 mm came out as a single 27.9 mm on `10177`, a
+  date in no year of the simulation, and nothing said so. It now reads
+  `IrrigationFOperations` as the fertiliser block already did, honours
+  `IIRRI = D` for days after planting, and keeps the dictionary line when no
+  database is passed. `format_dssat_yyddd` also gained the missing direction:
+  it rolled a day past December into the next year but not a day below 1 into
+  the previous one, so a crop sown early in the year with a pre-sowing
+  operation produced a day of 0 or less.
+- [ ] Audit the other X-file blocks for the same shape. The irrigation one
+  took every value from the dictionary; the fertiliser and residue ones read
+  the database. Each remaining block should be checked for which of the two
+  it is, since a block written from defaults looks entirely plausible in the
+  file.
 - [ ] The rotation's peanut season fails inside DSSAT v4.8, error 100 key
   `DEMAND` for `CRGRO048`, and `MEPHO` is not the cause. Tested with the
   override in place: `R`, `C` and `L` all give `DEMAND`, as do `SYMBI = Y`

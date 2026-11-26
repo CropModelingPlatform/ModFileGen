@@ -156,11 +156,22 @@ def is_leap_year(year):
 
 
 def format_dssat_yyddd(start_year, day):
+    """A ``yyddd`` date from a year and a day that may fall outside it.
+
+    Operations are declared relative to sowing, and the ones that precede
+    it are negative, so a crop sown early in the year lands on a day below
+    1 and belongs to the previous year. Only the overflow past 31 December
+    used to be handled; the other direction produced a day of 0 or less and
+    a date DSSAT cannot read.
+    """
     year = int(start_year)
     day = int(day)
     while day > 365 + is_leap_year(year):
         day -= 365 + is_leap_year(year)
         year += 1
+    while day < 1:
+        year -= 1
+        day += 365 + is_leap_year(year)
     return str(year)[2:4] + str(day).rjust(3, "0")
 
 
@@ -676,7 +687,10 @@ def writeBlockPlantingDetail(dssat_tableName, idSim, modelDictionary_Connection,
     return fileContent
 
 
-def writeBlockIrrigationWater(dssat_tableName, dssat_tableId, modelDictionary_Connection):
+def writeBlockIrrigationWater(
+    dssat_tableName, dssat_tableId, modelDictionary_Connection, idSim=None,
+    master_input_connection=None, Dv_irri=None,
+):
     fileContent = ""
     dssat_queryRead  = "Select Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'dssat') And ([Table] = '%s'));"%(dssat_tableName)
     DT = pd.read_sql_query(dssat_queryRead, modelDictionary_Connection)
@@ -712,28 +726,87 @@ def writeBlockIrrigationWater(dssat_tableName, dssat_tableId, modelDictionary_Co
     Dv = rw["dv"].values[0]
     fileContent += v_fmt_irrigation["IRNAME"].format(Dv) + "\n"
     dssat_tableName = "dssat_x_irrigation_water_data"
-    fileContent += writeBlockIrrigationWaterData(dssat_tableName, modelDictionary_Connection)
+    fileContent += writeBlockIrrigationWaterData(
+        dssat_tableName, modelDictionary_Connection, idSim,
+        master_input_connection, Dv_irri,
+    )
     return fileContent
 
-def writeBlockIrrigationWaterData(dssat_tableName, modelDictionary_Connection):
-    fileContent = "" 
+
+#: The declared irrigations of one simulation, in order. CropManagement is
+#: restricted to a single season by the successive converter, and standard
+#: mode refuses a rotation, so this joins without multiplying rows.
+_IRRIGATIONS = """
+    SELECT SimUnitList.StartYear, CropManagement.sowingdate,
+           IrrigationFOperations.IrrigationNumber,
+           IrrigationFOperations.DIrrigation,
+           IrrigationFOperations.IrrigationAmount
+    FROM IrrigationFOperations
+    JOIN CropManagement
+         ON CropManagement.IrrigationPolicyCode
+            = IrrigationFOperations.IrrigationPolicyCode
+    JOIN SimUnitList ON CropManagement.idMangt = SimUnitList.idMangt
+    WHERE SimUnitList.idsim = ?
+    ORDER BY IrrigationFOperations.IrrigationNumber
+"""
+
+
+def writeBlockIrrigationWaterData(
+    dssat_tableName, modelDictionary_Connection, idSim=None,
+    master_input_connection=None, Dv_irri=None,
+):
+    """The dated irrigations, one line per declared operation.
+
+    This block used to be written from the ModelsDictionary alone: a single
+    line carrying IDLAPL, IRRCOD and IIRV, which are template defaults. A
+    policy declaring three irrigations of 20, 30 and 30 mm came out as one
+    of 27.9 mm on a date belonging to no year of the simulation, and
+    nothing said so. The amounts and dates live in IrrigationFOperations,
+    and are read from there now, as the fertiliser block already did.
+    """
+    fileContent = ""
     dssat_queryRead = "Select Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'dssat') And ([Table] = '%s'));"%(dssat_tableName)
     DT = pd.read_sql_query(dssat_queryRead, modelDictionary_Connection)
-    siteColumnsHeader = "@I IDATE  IROP IRVAL" 
+    siteColumnsHeader = "@I IDATE  IROP IRVAL"
     fileContent += siteColumnsHeader + "\n"
-    rw = DT[DT["Champ"] == "LNIR"]
-    Dv = rw["dv"].values[0]
-    fileContent += v_fmt_irrigation["I"].format(float(Dv))
-    rw = DT[DT["Champ"] == "IDLAPL"]
-    Dv = rw["dv"].values[0]
-    fileContent += v_fmt_irrigation["IDATE"].format(Dv)
-    rw = DT[DT["Champ"] == "IRRCOD"]
-    Dv = rw["dv"].values[0]
-    fileContent += v_fmt_irrigation["IROP"].format(Dv)
-    rw = DT[DT["Champ"] == "IIRV"]
-    Dv = rw["dv"].values[0]
-    fileContent += v_fmt_irrigation["IRVAL"].format(float(Dv))
-    fileContent += "\n"
+
+    level = float(DT[DT["Champ"] == "LNIR"]["dv"].values[0])
+    method = DT[DT["Champ"] == "IRRCOD"]["dv"].values[0]
+
+    if master_input_connection is None or idSim is None:
+        # No database to read: keep the dictionary's single line, which is
+        # what every caller used to get.
+        fileContent += v_fmt_irrigation["I"].format(level)
+        fileContent += v_fmt_irrigation["IDATE"].format(
+            DT[DT["Champ"] == "IDLAPL"]["dv"].values[0]
+        )
+        fileContent += v_fmt_irrigation["IROP"].format(method)
+        fileContent += v_fmt_irrigation["IRVAL"].format(
+            float(DT[DT["Champ"] == "IIRV"]["dv"].values[0])
+        )
+        return fileContent + "\n"
+
+    operations = pd.read_sql_query(
+        _IRRIGATIONS, master_input_connection, params=(idSim,)
+    )
+    for index in range(operations.shape[0]):
+        sowing = int(operations["sowingdate"].values[index])
+        offset = int(operations["DIrrigation"].values[index])
+        fileContent += v_fmt_irrigation["I"].format(level)
+        if Dv_irri == "D":
+            # Days after planting, as the simulation options asked.
+            fileContent += v_fmt_irrigation["IDATE"].format(str(offset))
+        else:
+            fileContent += v_fmt_irrigation["IDATE"].format(
+                format_dssat_yyddd(
+                    operations["StartYear"].values[index], sowing + offset
+                )
+            )
+        fileContent += v_fmt_irrigation["IROP"].format(method)
+        fileContent += v_fmt_irrigation["IRVAL"].format(
+            float(operations["IrrigationAmount"].values[index])
+        )
+        fileContent += "\n"
     return fileContent
      
 
@@ -1701,7 +1774,10 @@ class DssatXConverter(Converter):
         dssat_tableId = "dssat_x_exp_id"
         if rows[0]["IrrigationPolicyCode"] == "0":
             fileContent += "\n"
-        else: fileContent += writeBlockIrrigationWater(dssat_tableName, dssat_tableId, modelDictionary_Connection)
+        else: fileContent += writeBlockIrrigationWater(
+            dssat_tableName, dssat_tableId, modelDictionary_Connection, idSim,
+            master_input_connection, Dv_irri,
+        )
         
         # Fertilizer
         dssat_tableName = "dssat_x_fertilizer"
