@@ -9,6 +9,7 @@ from modfilegen.output_configuration import OutputConfiguration
 from . import sticstempoparv6converter, sticsficiniconverter, sticsnewtravailconverter, sticsparamsolconverter
 from . import sticstempoparconverter, sticsclimatconverter, sticsfictec1converter
 from . import sticsstationconverter, sticsficplt1converter
+from . import sticsrunner
 import subprocess
 import os
 import sqlite3
@@ -326,7 +327,14 @@ def common_tempopar(ModelDictionary):
     fileContent += format_stics_data(DT, "codefrmur")
     fileContent += format_stics_data(DT, "codemicheur")
     fileContent += format_stics_data(DT, "codeoutscient")
-    fileContent += format_stics_data(DT, "codeseprapport")
+    # codeseprapport is forced to 2, which makes STICS separate the report
+    # columns with separateurrapport (';'), the separator create_df_summary
+    # and create_df_daily read the reports with. ModelsDictionary still
+    # carries 1, and sticsrun.sh used to patch the generated file at run time
+    # with a GNU-only `sed -i -z`. Generating the right value instead drops
+    # both the shell dependency and one rewrite of tempopar.sti per
+    # simulation.
+    fileContent += "codeseprapport\n2\n"
     fileContent += format_stics_data(DT, "separateurrapport")
     fileContent += format_stics_data(DT, "codesensibilite")
     fileContent += format_stics_data(DT, "codesnow")
@@ -911,6 +919,9 @@ def process_chunk(*args):
     chunk, mi, md, tpv6,tppar, directoryPath,pltfolder, rap, var, prof, dt, tempDir, *options = args
     dailyoutput = int(options[0]) if options else 0
     q0_strategy = options[1] if len(options) > 1 else "default"
+    # Resolved in main(): GlobalVariables does not cross into a loky worker,
+    # so a worker that looked it up itself would always get the default.
+    stics_executable = options[2] if len(options) > 2 else None
     dataframes = []
     # Apply series of functions to each row in the chunk
     weathertable = {}
@@ -1087,11 +1098,10 @@ def process_chunk(*args):
             del ficplt1converter  # Free converter
 
             # run stics
-            bs = os.path.join(Path(__file__).parent, "sticsrun.sh")
             try:
-                result = subprocess.run(
-                    ["bash", bs, usmdir, directoryPath, str(dt), str(dailyoutput)],
-                    capture_output=True, check=True, text=True, timeout=180,
+                result = sticsrunner.run_stics(
+                    usmdir, directoryPath, dt, dailyoutput,
+                    executable=stics_executable,
                 )
             except subprocess.TimeoutExpired as e:
                 print(f"⏰ STICS run timed out for {usmdir}. Killing...")
@@ -1314,9 +1324,10 @@ def _main_standard(simulations=None):
     del data  # Free original data list after chunking
     # Create a Pool of worker processes
     import uuid
+    stics_executable = sticsrunner.resolve_executable()
     args_list = [
         (chunk, mi, md, tpv6, tppar, directoryPath, pltfolder, rap, var, prof,
-         dt, tempDir, dailyoutput, q0_strategy)
+         dt, tempDir, dailyoutput, q0_strategy, stics_executable)
         for chunk in chunks
     ]
     del chunks  # Free chunks list after creating args_list

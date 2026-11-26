@@ -11,6 +11,7 @@ from .summary_output import (
 from . import sticstempoparv6converter, sticsficiniconverter, sticsnewtravailconverter, sticsparamsolconverter
 from . import sticstempoparconverter, sticsclimatconverter, sticsfictec1converter
 from . import sticsstationconverter, sticsficplt1converter
+from . import sticsrunner
 import subprocess
 import os
 import sqlite3
@@ -311,7 +312,14 @@ def common_tempopar(ModelDictionary):
     fileContent += format_stics_data(DT, "codefrmur")
     fileContent += format_stics_data(DT, "codemicheur")
     fileContent += format_stics_data(DT, "codeoutscient")
-    fileContent += format_stics_data(DT, "codeseprapport")
+    # codeseprapport is forced to 2, which makes STICS separate the report
+    # columns with separateurrapport (';'), the separator create_df_summary
+    # and create_df_daily read the reports with. ModelsDictionary still
+    # carries 1, and sticsrun.sh used to patch the generated file at run time
+    # with a GNU-only `sed -i -z`. Generating the right value instead drops
+    # both the shell dependency and one rewrite of tempopar.sti per
+    # simulation.
+    fileContent += "codeseprapport\n2\n"
     fileContent += format_stics_data(DT, "separateurrapport")
     fileContent += format_stics_data(DT, "codesensibilite")
     fileContent += format_stics_data(DT, "codesnow")
@@ -894,7 +902,10 @@ def process_chunk(*args):
     proc = psutil.Process(os.getpid())
     mem_before = proc.memory_info().rss / 1024**2  # MB
     mem_peak = mem_before
-    chunk, mi, md, tpv6,tppar, directoryPath,pltfolder, rap, var, prof, dt, tempDir, idx, dailyoutput = args
+    chunk, mi, md, tpv6,tppar, directoryPath,pltfolder, rap, var, prof, dt, tempDir, idx, dailyoutput, *options = args
+    # Resolved in main(): GlobalVariables does not cross into a loky worker,
+    # so a worker that looked it up itself would always get the default.
+    stics_executable = options[0] if options else None
     dataframes = []
     daily_dataframes = []
     profile_dataframes = []
@@ -1010,14 +1021,10 @@ def process_chunk(*args):
             del ficplt1converter  # Free converter
 
             # run stics
-            bs = os.path.join(Path(__file__).parent, "sticsrun.sh")
             try:
-                result = subprocess.run(
-                    ["bash", bs, usmdir, tempDir, str(dt), str(dailyoutput)],
-                    capture_output=True,
-                    check=True,
-                    text=True,
-                    timeout=180,
+                result = sticsrunner.run_stics(
+                    usmdir, tempDir, dt, dailyoutput,
+                    executable=stics_executable,
                 )
             except subprocess.TimeoutExpired as e:
                 print(f"⏰ STICS run timed out for {usmdir}. Killing...")
@@ -1371,7 +1378,8 @@ def main():
     print(f"📊 Total simulations to process: {len(data)}", flush=True)
     del data  # Free original data list after chunking
     # Create a Pool of worker processes
-    args_list = [(chunk,mi, md, tpv6,tppar,directoryPath,pltfolder, rap, var, prof, dt, tempDir, idx, dailyoutput) for idx, chunk in enumerate(chunks)]
+    stics_executable = sticsrunner.resolve_executable()
+    args_list = [(chunk,mi, md, tpv6,tppar,directoryPath,pltfolder, rap, var, prof, dt, tempDir, idx, dailyoutput, stics_executable) for idx, chunk in enumerate(chunks)]
     del chunks  # Free chunks list after creating args_list
     gc.collect()
 

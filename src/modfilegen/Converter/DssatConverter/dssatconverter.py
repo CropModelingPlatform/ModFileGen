@@ -24,6 +24,7 @@ from modfilegen.converter import Converter
 from modfilegen.output_configuration import OutputConfiguration
 from .summary_output import transform_summary_dataframe
 from . import dssatcultivarconverter, dssatsoilconverter, dssatweatherconverter, dssatxconverter
+from . import dssatrunner
 import sys, subprocess, shutil
 import concurrent.futures
 import numpy as np
@@ -211,7 +212,11 @@ def process_chunk(*args):
     import gc
     proc = psutil.Process(os.getpid())
     mem_before = proc.memory_info().rss / 1024**2  # MB
-    chunk, mi, md, directoryPath,pltfolder, dt, thirdyear, tempDir, idx, dailyoutput, dssat_version = args
+    chunk, mi, md, directoryPath,pltfolder, dt, thirdyear, tempDir, idx, dailyoutput, dssat_version, *options = args
+    # Resolved in main(): GlobalVariables does not cross into a loky
+    # worker, so a worker that looked it up itself would always get the
+    # default.
+    dssat_executable = options[0] if options else None
     tmp_csv = os.path.join(directoryPath, f"chunk_{idx}.csv")
     tmp_daily_csv = os.path.join(directoryPath, f"chunk_{idx}_dssat_daily.csv")
     for stale_file in (tmp_csv, tmp_daily_csv):
@@ -308,15 +313,14 @@ def process_chunk(*args):
             )
             del xconverter  # Free converter
 
-            # run dssat
-            bs = os.path.join(Path(__file__).parent, "dssatrun.sh")
+            # run dssat. stderr is captured, and the return code left
+            # unchecked, so the STOP99 test below can tell that case from an
+            # ordinary failure.
             try:
-                result = subprocess.run(["bash", bs, usmdir, tempDir, str(dt), str(dailyoutput), dssat_version],
-                                        stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.PIPE,   # capture to detect STOP99
-                                        check=False,              # manual check below
-                                        text=True,
-                                        timeout=300)
+                result = dssatrunner.run_batch(
+                    usmdir, tempDir, dt, dailyoutput, dssat_version,
+                    executable=dssat_executable,
+                )
                 # Always forward stderr to cluster error file
                 if result.stderr:
                     print(result.stderr, file=sys.stderr, end="", flush=True)
@@ -528,7 +532,8 @@ def main():
     chunks = chunk_data(data, parts, chunk_size=nthreads)
     del data  # Free original data list after chunking
     
-    args_list = [(chunk, mi, md, directoryPath, pltfolder, dt, thirdyear, tempDir, idx, dailyoutput,dssat_version) for idx, chunk in enumerate(chunks)]
+    dssat_executable = dssatrunner.resolve_executable(dssat_version)
+    args_list = [(chunk, mi, md, directoryPath, pltfolder, dt, thirdyear, tempDir, idx, dailyoutput,dssat_version, dssat_executable) for idx, chunk in enumerate(chunks)]
     del chunks  # Free chunks list after creating args_list
     
     try:

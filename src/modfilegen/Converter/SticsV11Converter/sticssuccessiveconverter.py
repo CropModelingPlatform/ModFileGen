@@ -36,6 +36,7 @@ from . import sticsficplt1converter
 from . import sticsfictec1converter
 from . import sticsnewtravailconverter
 from . import sticsparamsolconverter
+from . import sticsrunner
 from . import sticsstationconverter
 from . import sticstempoparconverter
 from .sticsconverter import (
@@ -368,6 +369,7 @@ def load_static_stics_files(package):
 def create_context(
     mi, md, directory_path, temp_dir, pltfolder, package, dt,
     soil_ids=None, q0_strategy="default", management_ids=None, point_ids=None,
+    stics_executable=None,
 ):
     template_rap, var, prof = load_static_stics_files(package)
     output_configuration = OutputConfiguration.from_files(
@@ -395,6 +397,10 @@ def create_context(
         "master": sqlite3.connect(mi),
         "dictionary": sqlite3.connect(md),
         "q0_strategy": q0_strategy,
+        # Resolved in main(): GlobalVariables does not cross into a loky
+        # worker, so a worker that looked it up itself would always get the
+        # default.
+        "stics_executable": stics_executable,
         "output_configuration": output_configuration,
         "output_selection": output_selection,
         "report_header": ";".join([
@@ -500,7 +506,7 @@ def generate_season_inputs(simulation, season, context):
     return row, str(usmdir), season_key
 
 
-def run_stics(usmdir, output_dir, dailyoutput=0):
+def run_stics(usmdir, output_dir, dailyoutput=0, executable=None):
     # Reusing a seasonal directory must not append results from a previous run.
     for report_name in ("mod_rapport.sti", "mod_rapportA.sti", "mod_rapportP.sti"):
         report = Path(usmdir) / report_name
@@ -511,13 +517,10 @@ def run_stics(usmdir, output_dir, dailyoutput=0):
             daily_file.unlink()
         for profile_file in Path(usmdir).glob("mod_profil*.sti"):
             profile_file.unlink()
-    script = Path(__file__).with_name("sticsrun.sh")
-    return subprocess.run(
-        ["bash", str(script), usmdir, output_dir, "0", str(int(dailyoutput))],
-        capture_output=True,
-        check=True,
-        text=True,
-        timeout=180,
+    # dt is 0: a seasonal USM directory is reused by the next season of the
+    # same rotation, so it must survive the run.
+    return sticsrunner.run_stics(
+        usmdir, output_dir, 0, dailyoutput, executable=executable
     )
 
 
@@ -586,7 +589,10 @@ def process_simulation(
                 copy_successive_state(previous_usmdir, usmdir)
                 set_usm_parameter(usm_file, "codesuite", 1)
 
-            run_stics(usmdir, directory_path, dailyoutput)
+            run_stics(
+                usmdir, directory_path, dailyoutput,
+                executable=context["stics_executable"],
+            )
             for state_file in STATE_FILES:
                 if not (Path(usmdir) / state_file).exists():
                     raise FileNotFoundError(
@@ -645,7 +651,7 @@ def process_simulation(
 
 def process_simulation_batch(
     simulations, mi, md, directory_path, temp_dir, pltfolder, package, dt,
-    dailyoutput=0, q0_strategy="default",
+    dailyoutput=0, q0_strategy="default", stics_executable=None,
 ):
     """Process several simulations with one shared, prefetched context."""
     context = create_context(
@@ -654,6 +660,7 @@ def process_simulation_batch(
         management_ids={simulation["idMangt"] for simulation in simulations},
         point_ids={simulation["idPoint"] for simulation in simulations},
         q0_strategy=q0_strategy,
+        stics_executable=stics_executable,
     )
     try:
         return [
@@ -704,7 +711,7 @@ def main(simulations=None):
     batch_results = Parallel(n_jobs=nthreads, backend="loky")(
         delayed(process_simulation_batch)(
             batch, mi, md, directory_path, temp_dir, pltfolder, package, dt,
-            dailyoutput, q0_strategy,
+            dailyoutput, q0_strategy, sticsrunner.resolve_executable(),
         )
         for batch in batches
     )

@@ -69,7 +69,7 @@ namespaces = true
 version = {attr = "modfilegen.version.__version__"}
 
 [tool.setuptools.package-data]
-modfilegen = ["*.json", "*.xml", "*.ini", "*.sh", "*.shp", "*.yml", "config/outputs/*.yml"]
+modfilegen = ["*.json", "*.xml", "*.ini", "*.shp", "*.yml", "config/outputs/*.yml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

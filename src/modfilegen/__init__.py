@@ -20,6 +20,15 @@ GlobalVariables = {"storeNumMinSimu" : 0,
                     # Soil albedo: "measured" (Soil.albedo) or "texture"
                     # (re-estimated from Soil.SoilTextureType).
                     "albedoStrategy": "measured",
+                    # Model executables. An empty value means the per-platform
+                    # default of the matching runner module. Resolve these in
+                    # main() and pass the result to the workers: a loky worker
+                    # re-imports this module and only ever sees the defaults
+                    # here, never what the caller set.
+                    "sticsV9Executable": "",
+                    "sticsV11Executable": "",
+                    "dssatExecutable": "",      # DSSAT v4.7
+                    "dssatV48Executable": "",   # DSSAT v4.8
                     "celsius_version": "v3",
                     "celsius_mode": "standard",
                     "dbCelsiusV32Template": "",

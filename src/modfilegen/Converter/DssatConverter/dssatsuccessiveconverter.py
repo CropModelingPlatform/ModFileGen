@@ -38,6 +38,7 @@ from modfilegen.output_configuration import OutputConfiguration
 from .summary_output import transform_summary_dataframe
 from . import dssatcultivarconverter, dssatsoilconverter, dssatxconverter
 from . import dssatweatherconverter_v2 as dssatweatherconverter
+from . import dssatrunner
 from .dssatconverter import export as prepare_sqlite_indexes
 from .dssatconverter import (
     DSSAT_DAILY_FILES,
@@ -53,16 +54,8 @@ SUMMARY_PREFIX = "Summary_"
 
 
 def batch_filename_for_version(dssat_version):
-    batch_filenames = {
-        "v47": "DSSBatch.v47",
-        "v48": "DSSBatch.v48",
-    }
-    try:
-        return batch_filenames[dssat_version]
-    except KeyError as exc:
-        raise ValueError(
-            f"Unsupported DSSAT version {dssat_version!r}; expected v47 or v48"
-        ) from exc
+    """The DSSBatch file name, from the single table in ``dssatrunner``."""
+    return dssatrunner.batch_file(dssat_version)
 
 
 @dataclass
@@ -886,13 +879,20 @@ def generate_successive_rotations(group, context, sequence_dir):
         season_database.close()
 
 
-def create_context(mi, md, directory_path, pltfolder, dt, dailyoutput, dssat_version="v47"):
+def create_context(
+    mi, md, directory_path, pltfolder, dt, dailyoutput, dssat_version="v47",
+    dssat_executable=None,
+):
     return {
         "directory_path": directory_path,
         "pltfolder": pltfolder,
         "dt": dt,
         "dailyoutput": dailyoutput,
         "dssat_version": dssat_version,
+        # Resolved in main(): GlobalVariables does not cross into a loky
+        # worker, so a worker that looked it up itself would always get the
+        # default.
+        "dssat_executable": dssat_executable,
         "master_input_connection": sqlite3.connect(mi),
         "model_dictionary_connection": sqlite3.connect(md),
     }
@@ -952,33 +952,33 @@ def raise_on_dssat_error(usmdir, args):
         raise subprocess.CalledProcessError(99, args)
 
 
-def run_dssat_q(usmdir, output_dir, summary_id, dssat_version="v47"):
-    script = Path(__file__).with_name("dssatrun_successive.sh")
-    args = ["bash", str(script), usmdir, output_dir, summary_id, dssat_version]
-    result = subprocess.run(
-        args,
-        stdout=subprocess.DEVNULL,
-        stderr=sys.stderr,
-        check=True,
-        text=True,
-        timeout=600,
+def run_dssat_q(usmdir, output_dir, summary_id, dssat_version="v47", executable=None):
+    """Sequence mode: the whole rotation chains inside one DSSAT run."""
+    result = dssatrunner.run_sequence(
+        usmdir, output_dir, summary_id, dssat_version, executable=executable
     )
-    raise_on_dssat_error(usmdir, args)
+    raise_on_dssat_error(usmdir, result.args)
     return result
 
 
-def run_dssat_b(usmdir, output_dir, dt, dssat_version="v47"):
-    script = Path(__file__).with_name("dssatrun.sh")
-    args = ["bash", str(script), usmdir, output_dir, str(dt), "0", dssat_version]
-    result = subprocess.run(
-        args,
-        stdout=subprocess.DEVNULL,
-        stderr=sys.stderr,
+def run_dssat_b(usmdir, output_dir, dt, dssat_version="v47", executable=None):
+    """Batch mode for a group of a single simulation.
+
+    ``summary_id`` is left to its default, the USM directory name, which is
+    what ``basename "$USM_DIR"`` gave the shell script; process_single_row
+    then reads Summary_<group_id>.OUT.
+    """
+    result = dssatrunner.run_batch(
+        usmdir,
+        output_dir,
+        dt,
+        dailyoutput=0,
+        dssat_version=dssat_version,
+        executable=executable,
         check=True,
-        text=True,
-        timeout=300,
+        stderr=sys.stderr,
     )
-    raise_on_dssat_error(usmdir, args)
+    raise_on_dssat_error(usmdir, result.args)
     return result
 
 
@@ -1194,7 +1194,10 @@ def process_single_row(row, context, directory_path, sequence_dir):
         context["dssat_version"],
         context["parameter_resolver"],
     )
-    run_dssat_b(sequence_dir, directory_path, context["dt"], context["dssat_version"])
+    run_dssat_b(
+        sequence_dir, directory_path, context["dt"], context["dssat_version"],
+        executable=context["dssat_executable"],
+    )
     summary = os.path.join(directory_path, f"Summary_{row['idsim']}.OUT")
     if not os.path.exists(summary):
         print(f"Summary file {summary} not found.", flush=True)
@@ -1207,7 +1210,7 @@ def process_single_row(row, context, directory_path, sequence_dir):
 
 def process_successive_group(
     group, mi, md, directory_path, temp_dir, pltfolder, dt, dailyoutput,
-    dssat_version="v47"
+    dssat_version="v47", dssat_executable=None
 ):
     validate_successive_group(group)
     group_id = safe_group_id(group)
@@ -1216,7 +1219,10 @@ def process_successive_group(
     Path(sequence_dir).mkdir(parents=True, exist_ok=True)
     print(f"Processing DSSAT successive group {group_key(group)} with {len(group)} simulation(s)", flush=True)
 
-    context = create_context(mi, md, directory_path, pltfolder, dt, dailyoutput, dssat_version)
+    context = create_context(
+        mi, md, directory_path, pltfolder, dt, dailyoutput, dssat_version,
+        dssat_executable,
+    )
     try:
         coordinate_resolver = CoordinateResolver(context["master_input_connection"])
         prefetch_soil_services(context, group, coordinate_resolver)
@@ -1241,7 +1247,10 @@ def process_successive_group(
         )
         #remove_rotation_workdirs(sequence_dir, rotations)
 
-        run_dssat_q(sequence_dir, directory_path, group_id, dssat_version)
+        run_dssat_q(
+            sequence_dir, directory_path, group_id, dssat_version,
+            executable=context["dssat_executable"],
+        )
         summary = os.path.join(directory_path, f"{SUMMARY_PREFIX}{group_id}.OUT")
         if not os.path.exists(summary):
             print(f"Summary file {summary} not found.", flush=True)
@@ -1280,6 +1289,7 @@ def main():
     dailyoutput = int(GlobalVariables.get("dailyoutput", 0))
     dssat_version = GlobalVariables.get("dssat_version", "v47")
     batch_filename_for_version(dssat_version)
+    dssat_executable = dssatrunner.resolve_executable(dssat_version)
     temp_dir = GlobalVariables.get("tempDir") or os.path.join(directory_path, "temp_dssat_successive")
 
     if not mi or not md:
@@ -1317,6 +1327,7 @@ def main():
                     dt,
                     dailyoutput,
                     dssat_version,
+                    dssat_executable,
                 )
                 for group in groups
             )
