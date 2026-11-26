@@ -147,13 +147,19 @@ and linked to an issue or pull request when one exists.
   per-crop-season route is exercised by default rather than by hand:
   `sticsv11.fictec1.codecalirrig` on season 3 and
   `dssat.dssat_x_simulation_method.MEPHO` = `L` on season 2, the peanut.
-- [ ] The automatic harvest window carries each season's own end date
-  (`HLAST`), so a rotation gets one control block per season even when
-  nothing else differs. That is what the data says and DSSAT accepts it, but
-  the official `UFGA7803.SQX` shares one window across its blocks. Worth
-  deciding whether a sequence's automatic windows should be season-specific
-  or sequence-wide; the answer is agronomic, and the values are inert unless
-  a switch is `A`.
+- [x] A `SIMULATION CONTROLS` block is duplicated only when a control
+  element really differs between treatments. The AUTOMATIC MANAGEMENT
+  section is written on every level because DSSAT's reader needs the
+  structure, and each rotation generated its windows from its own dates, so
+  two seasons growing the same crop under identical controls differed on
+  `PL` and `HA` alone and took a block each. Those windows are now made
+  sequence-wide *while their switch leaves them unused* -- `PLANT` other
+  than `A` for the planting window, `HARVS` other than `A` for the harvest
+  one. Turn a switch to `A` and the window becomes a real instruction, its
+  per-season values stand, and the blocks differ again. On the fixture:
+  2 blocks, `SM` = 1, 2, 1, the maize seasons sharing the first and the
+  peanut taking the second for its `MEPHO`, exactly the shape of
+  `UFGA7803.SQX`.
 - [ ] The rotation's peanut season fails inside DSSAT v4.8, error 100 key
   `DEMAND` for `CRGRO048`, and `MEPHO` is not the cause. Tested with the
   override in place: `R`, `C` and `L` all give `DEMAND`, as do `SYMBI = Y`

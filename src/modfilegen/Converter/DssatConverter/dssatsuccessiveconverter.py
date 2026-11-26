@@ -85,6 +85,11 @@ def group_start_yydoy(group):
     return date_to_yydoy(first_start)
 
 
+def group_end_yydoy(group):
+    """The last configured end date of the whole sequence."""
+    return date_to_yydoy(max(row_end_date(row) for row in group))
+
+
 def row_start_date(row):
     return julian_date(row["StartYear"], row["StartDay"])
 
@@ -711,6 +716,17 @@ def replace_fixed_width(line, start, end, value):
     return f"{line[:start]}{str(value):>{end - start}}{line[end:]}"
 
 
+#: Column of the first ``yyddd`` field on an automatic-management line, and
+#: of the second where there is one. Both are right-aligned on six.
+_FIRST_DATE = (14, 20)
+_SECOND_DATE = (20, 26)
+
+#: Which AUTOMATIC MANAGEMENT line each MANAGEMENT switch governs. A switch
+#: of "A" means DSSAT really uses that line, so its dates are a management
+#: decision and must be left exactly as the season produced them.
+_GOVERNED_BY = {"PLANT": "PL", "HARVS": "HA"}
+
+
 def replace_sim_control_id(line, rotation_index, nyers, sequence_start):
     line = replace_first_int(line, rotation_index)
     if re.match(r"^\s*\d+\s+GE\b", line):
@@ -719,7 +735,147 @@ def replace_sim_control_id(line, rotation_index, nyers, sequence_start):
     return line
 
 
-def simulation_control_blocks(rotations, nyers, sequence_start):
+def automatic_switches(body):
+    """The MANAGEMENT switches of one SIMULATION CONTROLS block.
+
+    ``@N MANAGEMENT  PLANT IRRIG FERTI RESID HARVS`` against its data line,
+    read by position, since that is how DSSAT reads it.
+    """
+    header = next(
+        (line for line in body if line.lstrip().startswith("@N MANAGEMENT")),
+        None,
+    )
+    values = next(
+        (line for line in body if re.match(r"^\s*\d+\s+MA\b", line)), None
+    )
+    if header is None or values is None:
+        return {}
+    switches = {}
+    for match in re.finditer(r"[A-Z]+", header[11:]):
+        end = match.end() + 11
+        switches[match.group(0)] = values[end - 1:end].strip()
+    return switches
+
+
+def with_inert_windows(body, sequence_start, sequence_end):
+    """The block with its *unused* automatic windows made sequence-wide.
+
+    The AUTOMATIC MANAGEMENT section is written on every level because
+    DSSAT's reader needs the structure, not because the season asked for
+    it. Each rotation generates its windows from its own dates, so two
+    seasons growing the same crop under identical controls differed on
+    those dates alone and took a block each, for nothing.
+
+    A window is only rewritten while its switch leaves it unused. Turn
+    ``PLANT`` to ``A`` and the planting window becomes a real instruction,
+    its per-season values stand, and the blocks differ again -- which is
+    then the right answer.
+    """
+    switches = automatic_switches(body)
+    rewritten = []
+    for line in body:
+        for switch, marker in _GOVERNED_BY.items():
+            if not re.match(rf"^\s*\d+\s+{marker}\b", line):
+                continue
+            if switches.get(switch) == "A":
+                break
+            if marker == "PL":
+                # Only the year moves: the window's opening and closing
+                # days are a management choice, and replacing a bound
+                # outright opened it on the simulation's start date.
+                for span in (_FIRST_DATE, _SECOND_DATE):
+                    line = replace_fixed_width(
+                        line, *span,
+                        in_the_sequence_year(line, span, sequence_start),
+                    )
+            else:
+                line = replace_fixed_width(line, *_SECOND_DATE, sequence_end)
+            break
+        rewritten.append(line)
+    return rewritten
+
+
+def in_the_sequence_year(line, span, sequence_start):
+    """The ``yyddd`` in ``span``, with the sequence's year and its own day."""
+    existing = line[span[0]:span[1]].strip()
+    if len(existing) != 5 or not existing.isdigit():
+        return existing
+    return f"{str(sequence_start)[:2]}{existing[2:]}"
+
+
+def merge_single_level_section(title, rotations, section, level_for_rotation=True, first_only=False):
+    selected = [rotation for rotation in rotations if section in rotation.sections]
+    if not selected:
+        return []
+    if first_only:
+        selected = selected[:1]
+
+    output = [selected[0].sections[section][0]]
+    seen_headers = set()
+    for rotation in selected:
+        body = split_section_body(rotation.sections[section])
+        level = rotation.index if level_for_rotation else 1
+        for line in replace_section_level(body, level):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("@"):
+                if stripped not in seen_headers:
+                    output.append(line)
+                    seen_headers.add(stripped)
+                continue
+            output.append(line)
+    return output
+
+
+def replace_fixed_width(line, start, end, value):
+    return f"{line[:start]}{str(value):>{end - start}}{line[end:]}"
+
+
+#: Column of the first ``yyddd`` field on an automatic-management line, and
+#: of the second where there is one. Both are right-aligned on six.
+_FIRST_DATE = (14, 20)
+_SECOND_DATE = (20, 26)
+
+
+def replace_sim_control_id(
+    line, rotation_index, nyers, sequence_start, sequence_end=None
+):
+    line = replace_first_int(line, rotation_index)
+    if re.match(r"^\s*\d+\s+GE\b", line):
+        line = replace_fixed_width(line, 15, 20, int(nyers))
+        line = replace_fixed_width(line, 33, 38, sequence_start)
+    elif sequence_end is None:
+        return line
+    elif re.match(r"^\s*\d+\s+PL\b", line):
+        # The automatic windows belong to the sequence, not to one of its
+        # seasons: DSSAT applies them year after year, and UFGA7803.SQX
+        # carries the same ones in both of its blocks. Each rotation
+        # generates them from its own season, which made two seasons
+        # growing the same crop under the same controls differ on dates
+        # alone -- and so take a block each, for nothing.
+        #
+        # Only the year moves. The window's opening and closing days are a
+        # management choice: replacing a bound outright would silently open
+        # the window on the simulation's start date instead.
+        for span in (_FIRST_DATE, _SECOND_DATE):
+            line = replace_fixed_width(
+                line, *span, in_the_sequence_year(line, span, sequence_start)
+            )
+    elif re.match(r"^\s*\d+\s+HA\b", line):
+        line = replace_fixed_width(line, *_SECOND_DATE, sequence_end)
+    return line
+
+
+def in_the_sequence_year(line, span, sequence_start):
+    """The ``yyddd`` in ``span``, with the sequence's year and its own day."""
+    existing = line[span[0]:span[1]].strip()
+    if len(existing) != 5 or not existing.isdigit():
+        return existing
+    return f"{str(sequence_start)[:2]}{existing[2:]}"
+
+
+def simulation_control_blocks(rotations, nyers, sequence_start, sequence_end):
     """One block per distinct set of controls, and each rotation's number.
 
     DSSAT numbers a whole ``SIMULATION CONTROLS`` block at once: GENERAL,
@@ -747,7 +903,11 @@ def simulation_control_blocks(rotations, nyers, sequence_start):
             raise ValueError(
                 f"Missing *SIMULATION CONTROLS for {rotation.row['idsim']}"
             )
-        body = [line for line in split_section_body(section) if line.strip()]
+        body = with_inert_windows(
+            [line for line in split_section_body(section) if line.strip()],
+            sequence_start,
+            sequence_end,
+        )
         signature = tuple(
             replace_sim_control_id(line, 0, nyers, sequence_start)
             for line in body
@@ -762,8 +922,10 @@ def simulation_control_blocks(rotations, nyers, sequence_start):
     return [body for _, body in blocks], numbers
 
 
-def merge_simulation_controls(rotations, nyers, sequence_start):
-    blocks, _ = simulation_control_blocks(rotations, nyers, sequence_start)
+def merge_simulation_controls(rotations, nyers, sequence_start, sequence_end):
+    blocks, _ = simulation_control_blocks(
+        rotations, nyers, sequence_start, sequence_end
+    )
     output = ["*SIMULATION CONTROLS"]
     for number, body in enumerate(blocks, start=1):
         for line in body:
@@ -774,7 +936,10 @@ def merge_simulation_controls(rotations, nyers, sequence_start):
     return output
 
 
-def build_sequence_file(rotations, model_dictionary_connection, master_input_connection, nyers, sequence_start):
+def build_sequence_file(
+    rotations, model_dictionary_connection, master_input_connection, nyers,
+    sequence_start, sequence_end,
+):
     first_sections = rotations[0].sections
     lines = [f"*EXP.DETAILS: {safe_group_id([rotations[0].row])} DSSAT SEQUENCE", ""]
 
@@ -786,7 +951,9 @@ def build_sequence_file(rotations, model_dictionary_connection, master_input_con
     lines.append("@N R O C TNAME.................... CU FL SA IC MP MI MF MR MC MT ME MH SM")
     # Grouped before the treatments are written: SM has to name the block
     # this crop-season's controls ended up in.
-    _, sm_numbers = simulation_control_blocks(rotations, nyers, sequence_start)
+    _, sm_numbers = simulation_control_blocks(
+        rotations, nyers, sequence_start, sequence_end
+    )
     for rotation in rotations:
         lines.append(treatment_line(
             rotation, model_dictionary_connection, master_input_connection,
@@ -816,7 +983,9 @@ def build_sequence_file(rotations, model_dictionary_connection, master_input_con
             lines.extend(merged)
             lines.append("")
 
-    lines.extend(merge_simulation_controls(rotations, nyers, sequence_start))
+    lines.extend(
+        merge_simulation_controls(rotations, nyers, sequence_start, sequence_end)
+    )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -1297,6 +1466,7 @@ def process_successive_group(
         nyers = dssat_sequence_years(group)
         rotations = generate_successive_rotations(group, context, sequence_dir)
         sequence_start = group_start_yydoy(group)
+        sequence_end = group_end_yydoy(group)
         Path(sequence_dir, SEQ_FILE_NAME).write_text(
             build_sequence_file(
                 rotations,
@@ -1304,6 +1474,7 @@ def process_successive_group(
                 context["master_input_connection"],
                 nyers,
                 sequence_start,
+                sequence_end,
             )
         )
         Path(sequence_dir, batch_filename_for_version(dssat_version)).write_text(
