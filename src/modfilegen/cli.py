@@ -8,13 +8,16 @@ is missing. This gives one command per question instead.
 machine will ask -- "is my install found?" -- and tells apart the two ways
 it can fail: ModFileGen cannot see the engine, or the engine itself is
 incomplete.
+
+``agriscale run`` then starts one model, with an exit status something can
+act on.
 """
 
 import argparse
 import json
 import sys
 
-from modfilegen import engines
+from modfilegen import engines, run_command
 from modfilegen.version import __version__
 
 #: Printed beside an engine, so the line reads on its own.
@@ -99,6 +102,10 @@ def build_parser():
     engines_command.add_argument(
         "--json", action="store_true", help="machine-readable output"
     )
+
+    run_command.add_arguments(
+        commands.add_parser("run", help="generate the input files and run a model")
+    )
     return parser
 
 
@@ -108,6 +115,9 @@ def main(argv=None):
 
     if arguments.command == "engines":
         return engines_report(as_json=arguments.json)
+
+    if arguments.command == "run":
+        return run_command.perform(arguments, sys.stdout)
 
     parser.print_help()
     return 1

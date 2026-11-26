@@ -8,6 +8,7 @@ Welcome to ModFileGen's documentation!
    introduction
    installation
    engines
+   command_line
    usage
    configuration
    output_configuration

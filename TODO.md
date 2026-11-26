@@ -39,7 +39,9 @@ and linked to an issue or pull request when one exists.
      the locale. Cultivar and plant files keep their CRLF convention, which
      `ficplt1.txt` proves the engines accept;
   4. guard against the Windows `MAX_PATH` limit on USM directories and against
-     file locks when `dt=1` deletes them;
+     file locks when `dt=1` deletes them. `agriscale run --temp` already lets
+     a caller shorten the path by hand, and `--delete-intermediate` is the
+     switch that exercises the lock case;
   5. add `windows-latest` and `macos-latest` to the CI matrix for the
      generation-only tests.
   6. **done in `7913d9de`, `078a482c`, `999330cf` and this commit**: verify
@@ -65,14 +67,33 @@ and linked to an issue or pull request when one exists.
   applications rather than native binaries, so like CELSIUS V32 they need
   `dotnet publish --runtime win-x64`, ideally `--self-contained` to avoid
   asking a student for a .NET install.
-- [ ] Ship a demo dataset in the package plus an `agriscale generate`
-  command, so `pip install` is self-sufficient and the Windows/Linux
-  cross-check has something to run. Blocked on two choices: pea or peanut for
-  the demo (`tests/stics_intercrop/cultivars/stics/peanut.txt` is in fact a
-  pea, `codeplante poi` / `codevar baccara`; the real peanut is
-  `araplt1_c1790.txt`), and DSSAT v4.7 or v4.8 (only `PNGRO048` is available,
-  while the fixture declares `CER047` for maize and an empty `DSCROP` for
-  `testcult2`).
+- [x] `agriscale run` generates the input files and starts one model, with an
+  exit status: 0 ran, 1 failed, 2 misconfigured. It fills `GlobalVariables`
+  and calls the dispatcher the notebooks call, so nothing runs per simulation
+  and the parallel path is untouched. The engine is resolved before any file
+  is generated, intermediate files are kept by default (the opposite of the
+  library default, since on a first run they are the only evidence of what
+  the engine was given), and `--manifest` writes a sha256 listing with
+  forward slashes so a Windows run compares with a Linux one byte for byte.
+  Documented in `docs/source/command_line.rst`, guarded by a test that the
+  page names every option the parser accepts -- which immediately caught
+  four it did not.
+- [ ] Make the committed CSV fixture runnable. `agriscale run --model stics
+  --version v11 --mode successive` against it reaches STICS and the engine
+  refuses the inputs with exit 9: `zr` is 2.0 in the station file while
+  `hautmax` is 2.5 in `maitest.txt`, and STICS requires the measurement
+  height above the crop height when `codeetp` is 3 (Shuttleworth-Wallace).
+  Either raise `zr` above 2.5 in the fixture's station data or lower
+  `hautmax`; document the change, per the fixture rule. Every management row
+  in the fixture uses `testcult`/`testcult2`, whose plant files
+  (`maitest.txt`, `peanut.txt`) live in
+  `tests/stics_successive/cultivars/stics` and are already committed, so no
+  new plant file is needed for STICS.
+- [ ] Ship the fixture as a demo dataset inside the package, so `pip install`
+  is self-sufficient without the repository. The STICS side needs no choice
+  any more; DSSAT still does: the fixture declares `CER047` for maize and an
+  empty `DSCROP` for `testcult2`, and only `PNGRO048` is available under
+  `tests/dssatsuccessive/cultivars/dssat`.
 - [ ] CELSIUS V32 soils only call `ParameterResolver.resolve()`, so a layer
   override (`NumLayer` > 0) on its `Soil` table is silently ignored; reject it
   with `resolve_layers("celsius", "Soil", soil_id, layer_count, ())`.

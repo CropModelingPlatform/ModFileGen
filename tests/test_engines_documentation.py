@@ -62,3 +62,49 @@ def test_the_page_is_in_the_table_of_contents():
         pytest.skip("the documentation sources are not part of this checkout")
 
     assert "\n   engines\n" in index.read_text(encoding="utf-8")
+
+
+COMMAND_PAGE = PAGE.parent / "command_line.rst"
+
+
+@pytest.fixture(scope="module")
+def command_page():
+    if not COMMAND_PAGE.is_file():
+        pytest.skip("the documentation sources are not part of this checkout")
+    return COMMAND_PAGE.read_text(encoding="utf-8")
+
+
+def test_the_command_page_names_every_option(command_page):
+    """An option renamed in the parser and not on the page sends the reader
+    to a command that argparse rejects."""
+    from modfilegen import cli
+
+    run = cli.build_parser()._subparsers._group_actions[0].choices["run"]
+    documented = [
+        option
+        for action in run._actions
+        for option in action.option_strings
+        if option.startswith("--") and option != "--help"
+    ]
+
+    missing = [option for option in documented if option not in command_page]
+
+    assert not missing, f"undocumented options: {missing}"
+
+
+def test_the_command_page_covers_every_model(command_page):
+    from modfilegen import run_command
+
+    for name, model in run_command.MODELS.items():
+        assert f"``{name}``" in command_page
+        for version in model.versions:
+            if version != "ng":  # APSIM NG has a single, unnamed version
+                assert f"``{version}``" in command_page
+
+
+def test_the_command_page_is_in_the_table_of_contents():
+    index = PAGE.parent / "index.rst"
+    if not index.is_file():
+        pytest.skip("the documentation sources are not part of this checkout")
+
+    assert "\n   command_line\n" in index.read_text(encoding="utf-8")
