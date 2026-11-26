@@ -14,26 +14,65 @@ and linked to an issue or pull request when one exists.
 
 - [ ] Make ModFileGen usable on Windows and macOS without WSL, so students
   without admin rights can run it (branch `cross-platform`):
-  1. add `engine_runner.py` (run engine with `cwd=`, collect and rename
-     outputs, delete the USM) and delete the seven `.sh` scripts plus the five
-     `subprocess.run(["bash", ...])` call sites, including the GNU-only
-     `sed -i -z` patch of `tempopar.sti`;
-  2. add `engines.py` resolving each executable as
-     `GlobalVariables` key, then environment variable, then `shutil.which()`,
-     then per-platform default, with `.exe` handling; `/opt/stics*/bin/stics_modulo`
-     is currently hard-coded inside the shell scripts, while `apsim_path` and
-     `celsiusV32Executable` already show the pattern to generalize;
-  3. force `encoding=` and `newline="\n"` in `Converter.write_file` and in the
-     ad-hoc `open()` calls of the APSIM and STICS converters, so Windows stops
-     producing cp1252 + CRLF for the Fortran engines;
+  1. **done in `71102ffd`**: `engine_runner.py` plus one `*runner.py` per
+     model replace the seven `.sh` scripts and the five
+     `subprocess.run(["bash", ...])` call sites; `codeseprapport` is
+     generated as 2 instead of patched by `sed -i -z`. Equivalence checked on
+     the real engines (identical summary CSVs; only the engines' own
+     timestamped raw outputs differ) and the launcher overhead dropped from
+     14.65 ms to 1.04 ms per simulation. `run_engine` falls back to the
+     platform interpreter for a wrapper the OS will not exec, such as DSSAT's
+     shebang-less `run_dssat`;
+  2. **done in `98ac2433`**: `modfilegen.engines` resolves all seven
+     executables through one cascade (`GlobalVariables` key, environment
+     variable, PATH, known install locations, bare name), with `.exe`
+     handling and a first look under `~/.modfilegen/engines/<engine>` for a
+     portable no-administrator install. STICS is never taken from PATH,
+     because v9 and v11 share the `stics_modulo` name. APSIM keeps its
+     `apsim_path = None` generate-only mode. Failures now name the key and
+     the environment variable to set;
+  3. **done in `59426136`**: `modfilegen.text_files` states one policy and
+     the 44 `open()` call sites use it. Writes are UTF-8 with LF on every
+     platform; engine output is decoded leniently, since DSSAT and STICS emit
+     bytes strict UTF-8 rejects (0xF8, 0xB0) and crashing on those loses a
+     simulation. `pandas.read_csv` needed nothing: it defaults to UTF-8, not
+     the locale. Cultivar and plant files keep their CRLF convention, which
+     `ficplt1.txt` proves the engines accept;
   4. guard against the Windows `MAX_PATH` limit on USM directories and against
      file locks when `dt=1` deletes them;
   5. add `windows-latest` and `macos-latest` to the CI matrix for the
      generation-only tests.
-  Engine availability was checked: `JavaSTICS-v11.0.0-rc2.zip` already ships
-  `bin/stics_modulo.exe`, DSSAT and APSIM have official Windows and macOS
-  builds, and CELSIUS V32 only needs `dotnet publish --runtime win-x64`.
-  CELSIUS v3 and `datamill` are prebuilt binaries with no Windows build yet.
+  6. **done in `7913d9de`, `078a482c`, `999330cf` and this commit**: verify
+     rather than download. `agriscale engines` reports where each engine was
+     found and tells `not found` (ModFileGen cannot see it) from
+     `incomplete` (the executable was copied away from the files it needs
+     beside it), naming the key and the variable to set in the syntax of the
+     reader's own shell -- every shell is listed, since Git Bash and WSL run
+     sh on Windows and `os.name` cannot tell. `docs/source/engines.rst`
+     covers where each engine comes from and what to unpack, with
+     `tests/test_engines_documentation.py` guarding it against drift. An
+     `install_engines` downloader was dropped: all three public models are
+     behind a free registration (INRAE forge account, a DSSAT e-mail form,
+     an APSIM licence choice), so none can be fetched unattended.
+     `JavaSTICS-v11.0.0-rc2.zip` carries both `bin/stics_modulo` and
+     `bin/stics_modulo.exe`, so STICS needs no build step on either
+     platform.
+  Engine availability, as the official pages state it: only STICS is
+  confirmed to ship a Windows simulator in its archive. DSSAT and APSIM
+  advertise Windows and macOS support but neither page says what the package
+  format is, so "official Windows build" is a claim their own documentation
+  does not make. CELSIUS v3 and `datamill` turned out to be `net5.0`
+  applications rather than native binaries, so like CELSIUS V32 they need
+  `dotnet publish --runtime win-x64`, ideally `--self-contained` to avoid
+  asking a student for a .NET install.
+- [ ] Ship a demo dataset in the package plus an `agriscale generate`
+  command, so `pip install` is self-sufficient and the Windows/Linux
+  cross-check has something to run. Blocked on two choices: pea or peanut for
+  the demo (`tests/stics_intercrop/cultivars/stics/peanut.txt` is in fact a
+  pea, `codeplante poi` / `codevar baccara`; the real peanut is
+  `araplt1_c1790.txt`), and DSSAT v4.7 or v4.8 (only `PNGRO048` is available,
+  while the fixture declares `CER047` for maize and an empty `DSCROP` for
+  `testcult2`).
 - [ ] CELSIUS V32 soils only call `ParameterResolver.resolve()`, so a layer
   override (`NumLayer` > 0) on its `Soil` table is silently ignored; reject it
   with `resolve_layers("celsius", "Soil", soil_id, layer_count, ())`.
@@ -96,24 +135,37 @@ and linked to an issue or pull request when one exists.
   `integration` tests that run the executables: extend the fixture weather to
   2004 for the DSSAT successive rotation, version the STICS cultivar files
   and DSSAT genotype files, then start with a CELSIUS V32 run.
-- [ ] Commit the five pending `migrations/*.sql` schema scripts that `AGENTS.md`
-  requires (ssat, coordinates tav/amp, overrides numlayer, drainfao, ssks).
-  The `.gitignore` rule blamed before no longer exists: `git check-ignore`
-  confirms the scripts are not ignored, only uncommitted.
+- [x] Commit the five pending `migrations/*.sql` schema scripts that `AGENTS.md`
+  requires (ssat, coordinates tav/amp, overrides numlayer, drainfao, ssks),
+  done in `2002ae50` together with their tests. The `.gitignore` rule blamed
+  before never existed any more: `git check-ignore` confirms the scripts were
+  not ignored, only uncommitted. That commit also documents the
+  `tests/stics_successive/ModelsDictionaryArise.db` migration (CELSIUS `Soil`
+  defaults in `Default_Value_Datamill`).
+- [ ] Decide what to do with `docs/stics/` (572 KB of generated HTML reference
+  for the STICS v11 soil and plant parameters), still untracked: version it,
+  move it out of the repository, or add it to `.gitignore`.
 - [ ] Renormalize the 19 files still stored as CRLF under `notebooks/`,
   `migrations/` and `tests/` (`git add --renormalize`), once the soil work in
   progress on those paths is committed. The 20 files outside them were done in
   `d6be03fc`.
-- [ ] `tests/test_tempopar.py` and `tests/test_tempoparv6.py` call
-  `export()` with an outdated signature (`usmdir` missing, and a `Connection`
-  passed where `write_file` expects a directory); both fail on a pristine
-  checkout. Realign the tests with the current converter API.
+- [x] `tests/test_tempopar.py` and `tests/test_tempoparv6.py` called `export()`
+  with an outdated signature (`usmdir` missing, and a `Connection` passed where
+  `write_file` expects a directory). Both are now real tests on the text
+  fixtures: tempopar is parametrized over the four stress combinations to pin
+  the 1/2 activation codes and checks the fixed part resolved by
+  `common_tempopar`, tempoparv6 checks that `common_tempoparv6` resolves the
+  st_tempoparv6 rows and that the converter writes them verbatim.
 - [ ] Add a reference MasterInput input schema to the package and a test that
   keeps `tests/fixtures/sources/masterinput/schema.sql` identical to it.
 - [ ] Add more named scenarios to the text MasterInput fixture: two soils,
   point overrides.
 - [ ] Move converter tests from the per-model fixture databases to the
-  `masterinput_db` / `masterinput_copy` pytest fixtures.
+  `masterinput_db` / `masterinput_copy` pytest fixtures. Done for
+  `test_sticsconverter.py`, `test_dssatconverter.py`, `test_tempopar.py`,
+  `test_tempoparv6.py`, `apsim/test_apsim_converter.py` and
+  `apsim/test_management_with_real_db.py`; `test_celsiusconverter.py` and
+  `apsim/test_apsim_main.py` still convert the committed databases in place.
 - [ ] Republish `celsiusV32` from the optimized Celsius ADODB layer and check a
   two-crop association run writes identical `OutputD_2` rows before and after.
 - [ ] Regenerate `tests/celsius/output_v32_standard/celsius_v32_standard.db`
@@ -138,37 +190,45 @@ and linked to an issue or pull request when one exists.
   development dependencies. Use the `agrometflow` conda environment, which has
   `joblib` and `modfilegen` installed editable on the working tree; the conda
   `base` environment has no `joblib` and leaves 8 modules uncollectable.
-  Baseline on 2026-11-26: **282 passed, 7 failed, 2 collection errors**, run as
-  `~/miniforge3/envs/agrometflow/bin/python -m pytest tests/ -o addopts=""
-  --continue-on-collection-errors`. `-o addopts=""` is needed because
-  `pytest-cov` is absent while `pyproject.toml` sets `--cov=modfilegen`; add
-  `pytest-cov` to that environment to run the suite with coverage.
-- [ ] Running the suite mutates two committed fixture databases in place:
-  `tests/data/MasterInput_bon_test.db` and
-  `tests/data/CelsiusV3nov17_dataArise.db` come back modified (same size,
-  different bytes) and have to be restored with `git restore` afterwards. The
-  converters write to their input databases: `dssatconverter.export()` issues
-  `CREATE INDEX IF NOT EXISTS` on MasterInput and sets `PRAGMA journal_mode =
-  WAL`, and CELSIUS does the same. This breaks the `AGENTS.md` rule against
-  undocumented fixture changes and makes any CI run dirty. Either copy the
-  database to a temporary directory before converting, or open the input
-  read-only and build the indexes on the copy.
-- [ ] Fix or delete the four legacy test modules that fail on a pristine
-  checkout for API drift, not for a code defect:
-  - `tests/apsim/test_apsim_converter.py` imports `Converter...` from the
-    pre-package layout (`ModuleNotFoundError: No module named 'Converter'`);
-  - `tests/test_sticsconverter.py` imports a `SticsConverter` class that the
-    module no longer defines since it moved to functions plus `main()`;
-  - `tests/test_dssatconverter.py` and `tests/test_sticsconverter2.py` call
-    `main()` without configuring `GlobalVariables`, so `directorypath` is still
-    `""` and `os.makedirs("")` raises `FileNotFoundError`. Move them to the
-    `masterinput_db` fixtures instead.
-- [ ] The three APSIM tests on the real database
-  (`tests/apsim/test_database_integration.py::test_database_query` and
-  `::test_full_export`, `tests/apsim/test_management_with_real_db.py::test_query_operations_directly`)
-  query `ListCultivars.SpeciesName`, a column the fixture database does not
-  have (`sqlite3.OperationalError: no such column`). Align the converter query
-  with the current MasterInput schema or migrate the fixture.
+  Baseline on 2026-11-26: **306 passed, 2 skipped** (the two opt-in engine
+  tests), run as `~/miniforge3/envs/agrometflow/bin/python -m pytest tests/
+  -o addopts=""`. `-o addopts=""` is needed because `pytest-cov` is absent
+  while `pyproject.toml` sets `--cov=modfilegen`; add `pytest-cov` to that
+  environment to run the suite with coverage.
+- [ ] `tests/test_celsiusconverter.py` still mutates the committed
+  `tests/data/CelsiusV3nov17_dataArise.db` in place: it comes back modified
+  (same size, different bytes) after the suite and has to be restored with
+  `git restore`. The converters write to their input database (`export()`
+  issues `CREATE INDEX IF NOT EXISTS` and sets `PRAGMA journal_mode = WAL`),
+  so the test has to convert a copy. This breaks the `AGENTS.md` rule against
+  undocumented fixture changes and makes any CI run dirty. The adapted
+  converter tests already use the `masterinput_copy` / `legacy_*_copy`
+  fixtures for exactly this reason; `tests/apsim/test_apsim_main.py` should
+  follow, as it converts `MasterInput_bon_test.db` directly.
+- [x] Fix the four legacy test modules that failed on a pristine checkout for
+  API drift rather than a code defect. All four now run on the text fixtures:
+  - `tests/apsim/test_apsim_converter.py` imported `Converter...` from the
+    pre-package layout and called `export()` with five keyword arguments it
+    does not take; it now pins the real `export(MasterInput, ModelDictionary)`
+    contract (indexes dropped first, then recreated; WAL; and the indexes
+    APSIM deliberately does not create, unlike STICS and DSSAT);
+  - `tests/test_sticsconverter.py` imported a `SticsConverter` class that no
+    longer exists; it now covers v9 simulation selection, `chunk_data`
+    partitioning and index creation;
+  - `tests/test_sticsconverter2.py` and `tests/test_dssatconverter.py` called
+    `main()` with an unconfigured `GlobalVariables`; the engine runs moved
+    behind the new `integration` marker, and `test_dssatconverter.py` also
+    covers the chunking, the indexes and the rejection of an unsupported
+    DSSAT version.
+- [x] The three APSIM tests that failed on `ListCultivars.SpeciesName`. The
+  shared schema always had the column: `test_database_integration.py` declared
+  its own in-memory `ListCultivars` with `CropName`, and
+  `test_management_with_real_db.py` pointed at an absolute path on another
+  machine (`/mnt/d/Mes Donnees/TCMP/github/...`). The first now uses
+  `SpeciesName`, the second runs on the `masterinput_db` fixture.
+- [ ] Extend the opt-in `integration` marker (`--run-integration`, see
+  `tests/conftest.py`) to APSIM, CELSIUS v3 and CELSIUS V32, and to the
+  successive runs; only STICS v9 and DSSAT standard are covered so far.
 - [ ] Add end-to-end tests proving that simulations sharing an `idSoil` reuse
   prefetched soil data and generated soil-file content.
 - [ ] Add regression tests for default, computed, and explicit `q0` values.

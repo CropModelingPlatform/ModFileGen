@@ -151,6 +151,7 @@ ENGINES = {
         env_var="MODFILEGEN_CELSIUS_V3",
         commands=("celsius",),
         locations=("celsius/celsius", "/usr/share/celsius/celsius"),
+        companions=("*.dll",),
     ),
     "datamill": Engine(
         label="DataMill",
@@ -158,6 +159,7 @@ ENGINES = {
         env_var="MODFILEGEN_DATAMILL",
         commands=("datamill",),
         locations=("datamill/datamill", "/usr/share/datamill/datamill"),
+        companions=("*.dll",),
     ),
 }
 
