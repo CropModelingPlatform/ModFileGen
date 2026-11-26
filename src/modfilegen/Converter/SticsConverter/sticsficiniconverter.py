@@ -3,6 +3,7 @@ from sqlite3 import Connection
 import os
 import pandas as pd
 import traceback
+from modfilegen.paths import path_parts
 
 class SticsFicIniConverter(Converter):
     def __init__(self):
@@ -12,7 +13,7 @@ class SticsFicIniConverter(Converter):
         fileName = "ficini.txt"
         file_lines = []
         fileContent = ""
-        ST = directory_path.split(os.path.sep)
+        ST = path_parts(directory_path)
         id_sim = ST[-3]
         T = "Select  Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'stics') And ([Table] = 'st_ficini'));"
         fetchAllQuery = """SELECT SimUnitList.idIni, Soil.IdSoil, Soil.SoilOption, Soil.Wwp, Soil.Wfc, Soil.bd, InitialConditions.WStockinit, InitialConditions.Ninit 

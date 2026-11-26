@@ -2,6 +2,7 @@ from modfilegen.converter import Converter
 import os
 import pandas as pd
 import traceback
+from modfilegen.paths import path_parts
 
 
 STICS_LAYER_COUNT = 5
@@ -56,7 +57,7 @@ class SticsFicIniConverter(Converter):
     ):
         file_name = "ficini.txt"
         file_lines = []
-        id_sim = directory_path.split(os.path.sep)[-3]
+        id_sim = path_parts(directory_path)[-3]
 
         defaults_query = """
             SELECT Champ, Default_Value_Datamill, defaultValueOtherSource,

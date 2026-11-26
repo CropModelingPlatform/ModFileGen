@@ -1,6 +1,7 @@
 """Configuration and process runner for CELSIUS V32."""
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 import shutil
@@ -46,7 +47,7 @@ def _occurrence_sowing_year(start_year, sowing_day):
 def _summary_dataframe(
     master, celsius_database, output_configuration, output_selection
 ):
-    with sqlite3.connect(celsius_database) as source:
+    with _connect(celsius_database) as source:
         outputs = pd.read_sql_query(
             """
             SELECT o.*, s.Situation, s.codesuite,
@@ -87,7 +88,7 @@ def _summary_dataframe(
     outputs["Idsim"] = original_ids
     outputs["SeasonOrder"] = season_orders
     outputs["PlantOrder"] = 1
-    with sqlite3.connect(master) as source:
+    with _connect(master) as source:
         simulations = pd.read_sql_query(
             "SELECT idsim, idPoint, StartYear FROM SimUnitList", source
         ).to_dict(orient="records")
@@ -112,7 +113,7 @@ def _summary_dataframe(
 
 
 def _store_summary(master, summary, output_configuration, output_selection):
-    with sqlite3.connect(master) as target:
+    with _connect(master) as target:
         added_columns = output_configuration.ensure_summary_output_schema(
             target, output_selection
         )
@@ -154,7 +155,7 @@ def _write_summary_csv(summary, directory):
 
 def _set_daily_output(celsius_database, enabled):
     """Write daily OutputD_* rows only when requested; they dominate run time."""
-    with sqlite3.connect(celsius_database) as connection:
+    with _connect(celsius_database) as connection:
         connection.execute(
             "UPDATE OptionsModel SET EcritDResus = ?", (1 if enabled else 0,)
         )
@@ -175,6 +176,25 @@ WORKER_FILTERS = (
 )
 
 
+def _connect(database):
+    """Open a database, commit on success, and always close it.
+
+    ``with _connect(...)`` commits or rolls back on exit but leaves
+    the connection open. On Windows a still-open handle keeps the file from
+    being deleted, which left the worker directory behind after a parallel
+    run; POSIX never complained, so it went unnoticed.
+    """
+    connection = sqlite3.connect(database)
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
+
+
+_connect = contextmanager(_connect)
+
+
 def _simulation_chains(celsius_database):
     """Return SimUnitList rowids grouped into chains, in engine order.
 
@@ -182,7 +202,7 @@ def _simulation_chains(celsius_database):
     ``codesuite`` is not 0, so a chain must stay in a single process.
     """
     chains = []
-    with sqlite3.connect(celsius_database) as connection:
+    with _connect(celsius_database) as connection:
         for rowid, codesuite in connection.execute(
             "SELECT rowid, codesuite FROM SimUnitList ORDER BY ChampTri"
         ):
@@ -221,7 +241,7 @@ def _table_columns(connection, schema, table):
 
 def _prepare_worker_database(celsius_database, worker_database, rowids):
     shutil.copy2(celsius_database, worker_database)
-    with sqlite3.connect(worker_database) as connection:
+    with _connect(worker_database) as connection:
         connection.execute("CREATE TEMP TABLE kept_simulations (id INTEGER PRIMARY KEY)")
         connection.executemany(
             "INSERT INTO kept_simulations VALUES (?)", [(rowid,) for rowid in rowids]
@@ -245,7 +265,7 @@ def _prepare_worker_database(celsius_database, worker_database, rowids):
 
 def _merge_worker_outputs(celsius_database, worker_databases):
     """Append worker outputs to the main database, in worker order."""
-    with sqlite3.connect(celsius_database) as connection:
+    with _connect(celsius_database) as connection:
         for table in OUTPUT_TABLES:
             if _table_columns(connection, "main", table):
                 connection.execute(f"DELETE FROM [{table}]")
@@ -370,7 +390,10 @@ def run_model(celsius_database, executable=None, workers=1):
         )
 
     _merge_worker_outputs(celsius_database, worker_databases)
-    shutil.rmtree(work_dir, ignore_errors=True)
+    # remove_tree retries, because Windows refuses to unlink a file another
+    # handle still holds; ignore_errors=True used to hide that silently.
+    if not engine_runner.remove_tree(work_dir):
+        print(f"Could not remove the worker directory {work_dir}", flush=True)
 
 
 def run(mode):
