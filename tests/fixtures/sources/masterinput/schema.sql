@@ -213,7 +213,7 @@ CREATE TABLE "Soil" (
   "SoilTextureType" TEXT,
   "SoilOption" TEXT,
   "Slope" TEXT,
-  "RunoffType" INTEGER,
+  "RunoffType" TEXT,
   "albedo" REAL
 , Ssat REAL, Ssks REAL, DrainFAO INTEGER CHECK (DrainFAO BETWEEN 1 AND 7));
 

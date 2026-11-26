@@ -86,6 +86,7 @@ This overwrites `schema.sql` and every CSV file.
 | 2026-10-24 | MasterInput `SoilLayers` | `Ssat` empty strings replaced by NULL, the value the Ssat migration defines for an unknown layer saturation (an empty string made DSSAT fail on detailed soils). |
 | 2026-10-24 | `migrations/20261024_add_soil_ssks.sql` | `Soil.Ssks` and `SoilLayers.Ssks` (cm/h), NULL in the fixture. |
 | 2026-10-24 | `migrations/20261024_add_soil_drainfao.sql` | `Soil.DrainFAO` (FAO drainage class 1 to 7), NULL in the fixture. |
+| 2026-10-24 | MasterInput `Soil` schema | `RunoffType` declared TEXT, like `RunoffTypes.RunoffType` (values unchanged). |
 
 The initial content covers: one point and one soil, years 2000 to 2002,
 5 simulations, successive seasons, two-crop association, non-zero irrigation,

@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import date
 from types import SimpleNamespace
 
 import pandas as pd
@@ -129,12 +130,53 @@ def test_season_dates_use_sowing_year_offset_without_fallow_rows(masterinput_db)
         row = simulation_row(connection)
         managements = converter.successive_managements(row, connection)
 
-    seasons = converter.successive_season_rows(row, managements)
+    with sqlite3.connect(masterinput_db) as connection:
+        seasons = converter.successive_season_rows(row, managements, connection)
 
-    assert [(item["StartYear"], item["StartDay"]) for item in seasons] == [
-        (2000, 120), (2000, 351), (2001, 351)
+    assert [
+        (item["StartYear"], item["StartDay"], item["EndYear"], item["EndDay"])
+        for item in seasons
+    ] == [
+        (2000, 120, 2001, 139),
+        (2001, 140, 2002, 149),
+        (2002, 150, 2002, 350),
     ]
     assert len(seasons) == len(managements) == 3
+
+
+def test_management_pattern_repeats_until_simunit_end():
+    row = {
+        "idsim": "long-rotation",
+        "StartYear": 2000,
+        "StartDay": 1,
+        "EndYear": 2005,
+        "EndDay": 365,
+    }
+    templates = [
+        {
+            "SeasonOrder": 1,
+            "PlantOrder": 1,
+            "SeasonYearOffset": 0,
+            "sowingdate": 100,
+        },
+        {
+            "SeasonOrder": 2,
+            "PlantOrder": 1,
+            "SeasonYearOffset": 1,
+            "sowingdate": 150,
+        },
+    ]
+
+    managements = converter.expand_successive_managements(row, templates)
+    seasons = converter.successive_season_rows(row, managements)
+
+    assert [item["SeasonOrder"] for item in managements] == list(range(1, 7))
+    assert [item["TemplateSeasonOrder"] for item in managements] == [
+        1, 2, 1, 2, 1, 2,
+    ]
+    assert [item["SeasonYearOffset"] for item in managements] == list(range(6))
+    assert converter.row_start_date(seasons[0]) == date(2000, 1, 1)
+    assert converter.row_end_date(seasons[-1]) == date(2005, 12, 31)
 
 
 def test_in_memory_database_is_reused_across_seasons(masterinput_db):
@@ -156,53 +198,58 @@ def test_in_memory_database_is_reused_across_seasons(masterinput_db):
             connection.close()
 
 
-def test_last_season_is_truncated_at_simunit_end():
+def test_successive_connection_neutralizes_legacy_dharvest(masterinput_db):
+    with sqlite3.connect(masterinput_db) as source:
+        row = simulation_row(source)
+        management = converter.successive_managements(row, source)[0]
+        connection = converter.successive_group_connection(source)
+        try:
+            connection.execute(
+                "UPDATE SuccessiveCropManagement SET DHarvest = NULL "
+                "WHERE idMangt = ? AND SeasonOrder = ? AND PlantOrder = ?",
+                (
+                    management["idMangt"],
+                    management["SeasonOrder"],
+                    management["PlantOrder"],
+                ),
+            )
+            converter.configure_season_connection(connection, row, management)
+
+            assert connection.execute(
+                "SELECT DHarvest FROM CropManagement"
+            ).fetchone() == (0,)
+        finally:
+            connection.close()
+
+
+def test_successive_boundaries_ignore_dharvest():
     row = {
         "idsim": "rotation",
         "StartYear": 1991,
         "StartDay": 1,
-        "EndYear": 2000,
+        "EndYear": 1992,
         "EndDay": 365,
     }
-    management = {
-        "SeasonOrder": 10,
-        "SowingYearOffset": 9,
-        "sowingdate": 270,
-        "DHarvest": 250,
-    }
+    managements = [
+        {
+            "SeasonOrder": 1,
+            "SeasonYearOffset": 0,
+            "sowingdate": 100,
+            "DHarvest": 999,
+        },
+        {
+            "SeasonOrder": 2,
+            "SeasonYearOffset": 1,
+            "sowingdate": 150,
+            "DHarvest": 1,
+        },
+    ]
 
-    season = converter.season_simunit_row(
-        row,
-        management,
-        is_last_season=True,
-        previous_season_end=converter.julian_date(2000, 155),
-    )
+    seasons = converter.successive_season_rows(row, managements)
 
-    assert (season["StartYear"], season["StartDay"]) == (2000, 156)
-    assert (season["EndYear"], season["EndDay"]) == (2000, 365)
-
-
-def test_non_final_season_cannot_exceed_simunit_end():
-    row = {
-        "idsim": "rotation",
-        "StartYear": 1991,
-        "StartDay": 1,
-        "EndYear": 2000,
-        "EndDay": 365,
-    }
-    management = {
-        "SeasonOrder": 9,
-        "SowingYearOffset": 9,
-        "sowingdate": 270,
-        "DHarvest": 250,
-    }
-
-    try:
-        converter.season_simunit_row(row, management)
-    except ValueError as error:
-        assert "is outside simulation" in str(error)
-    else:
-        raise AssertionError("An overflowing non-final season must be rejected")
+    assert converter.row_end_date(seasons[0]) == converter.julian_date(1992, 149)
+    assert converter.row_start_date(seasons[1]) == converter.julian_date(1992, 150)
+    assert converter.row_end_date(seasons[1]) == converter.julian_date(1992, 365)
 
 
 def test_simunit_rows_are_not_grouped_as_successive_seasons_anymore(masterinput_db):
@@ -340,3 +387,32 @@ def test_legacy_sowing_year_offset_column_is_still_accepted(masterinput_copy):
 
     assert [item["SeasonYearOffset"] for item in managements] == [0, 1, 2]
     assert [converter.season_year_offset(item) for item in managements] == [0, 1, 2]
+
+
+def test_soil_file_is_built_once_per_soil_point_and_site(
+    masterinput_db, modelsdictionary_db, tmp_path
+):
+    from modfilegen.coordinate_resolver import CoordinateResolver
+
+    context = converter.create_context(
+        str(masterinput_db), str(modelsdictionary_db), str(tmp_path), None, 1, 0
+    )
+    try:
+        with sqlite3.connect(masterinput_db) as connection:
+            connection.row_factory = sqlite3.Row
+            rows = [dict(row) for row in connection.execute("SELECT * FROM SimUnitList")]
+        converter.prefetch_soil_services(
+            context, rows, CoordinateResolver(context["master_input_connection"])
+        )
+        first, second = tmp_path / "first", tmp_path / "second"
+        first.mkdir()
+        second.mkdir()
+
+        converter.write_soil_file(context, rows[0], str(first))
+        converter.write_soil_file(context, rows[0], str(second))
+    finally:
+        converter.close_context(context)
+
+    assert len(context["soil_files"]) == 1
+    assert (first / "XX.SOL").read_text() == (second / "XX.SOL").read_text()
+    assert "*XXMgt10101" in (second / "XX.SOL").read_text()

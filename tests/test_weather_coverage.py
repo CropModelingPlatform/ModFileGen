@@ -53,6 +53,7 @@ def test_missing_final_year_skips_only_the_simulations_that_need_it(
 
     assert _ids(kept) == [
         "5.925_6.025_2000_Mgt1M0_150_2",
+        "5.925_6.025_2001_FERT_MIN_ORG_2",
         "5.925_6.025_2001_Mgt1M0_150_2",
     ]
     with open(tmp_path / "skipped_simulations_test.csv", encoding="utf-8") as handle:
@@ -74,6 +75,7 @@ def test_gap_inside_the_period_skips_the_simulation(masterinput_copy):
     assert "5.925_6.025_2001_Mgt1M0_150_2" not in _ids(kept)
     assert sorted(item.idsim for item in skipped) == [
         "5.925_6.025_2000_ROT_MAIZE_PEANUT_3Y_2",
+        "5.925_6.025_2001_FERT_MIN_ORG_2",
         "5.925_6.025_2001_Mgt1M0_150_2",
     ]
 
@@ -92,7 +94,7 @@ def test_point_without_weather_and_invalid_dates_are_skipped(masterinput_copy):
 
 
 def test_celsius_v32_conversion_does_not_convert_uncovered_simulations(
-    masterinput_copy, celsius_v32_template_db, tmp_path
+    masterinput_copy, celsius_v32_template_db, modelsdictionary_db, tmp_path
 ):
     import shutil
 
@@ -103,7 +105,11 @@ def test_celsius_v32_conversion_does_not_convert_uncovered_simulations(
     shutil.copy2(celsius_v32_template_db, target)
 
     convert_database(
-        masterinput_copy, target, mode="successive", report_directory=tmp_path
+        masterinput_copy,
+        target,
+        mode="successive",
+        report_directory=tmp_path,
+        models_dictionary=modelsdictionary_db,
     )
 
     with sqlite3.connect(target) as connection:
