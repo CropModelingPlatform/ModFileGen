@@ -121,7 +121,7 @@ def create_complete_simulation():
     ])
     
     # Load existing simulation file
-    with open('simulation.apsimx', 'r') as f:
+    with open('simulation.apsimx', 'r', encoding='utf-8') as f:
         sim_data = json.load(f)
     
     # Add management operations
@@ -136,7 +136,7 @@ def create_complete_simulation():
     sim_data = _complete_simulation_structure(sim_data, weather_file)
     
     # Save completed simulation
-    with open('simulation.apsimx', 'w') as f:
+    with open('simulation.apsimx', 'w', encoding='utf-8') as f:
         json.dump(sim_data, f, indent=2)
     
     print(f"✓ Management added to: simulation.apsimx")

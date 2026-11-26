@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 from modfilegen.Converter.ApsimConverter.apsimsoilconverter import ApsimSoilConverter
 import pandas as pd
 import json
+import pytest
 
 
 def test_create_new_soil():
@@ -48,7 +49,7 @@ def test_create_new_soil():
     
     if result:
         # Verify the file
-        with open('test_new_soil.apsimx', 'r') as f:
+        with open('test_new_soil.apsimx', 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         print("\n✓ File created successfully!")
@@ -62,10 +63,9 @@ def test_create_new_soil():
         print(f"  - Number of layers: {len(soil['Children'][0]['Thickness'])}")
         print(f"  - Coordinates: ({soil['Latitude']}, {soil['Longitude']})")
         
-        return True
     else:
         print("✗ Failed to create soil file")
-        return False
+        pytest.fail("the soil converter wrote no .apsimx")
 
 
 def test_minimal_soil():
@@ -98,7 +98,7 @@ def test_minimal_soil():
     )
     
     if result:
-        with open('test_minimal_soil.apsimx', 'r') as f:
+        with open('test_minimal_soil.apsimx', 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         zone = data['Children'][0]['Children'][0]
@@ -110,10 +110,9 @@ def test_minimal_soil():
         print(f"  - AirDry (calculated): {physical['AirDry']}")
         print(f"  - KS (default): {physical['KS']}")
         
-        return True
     else:
         print("✗ Failed to create minimal soil file")
-        return False
+        pytest.fail("the soil converter wrote no minimal .apsimx")
 
 
 def test_update_existing_soil():
@@ -163,7 +162,7 @@ def test_update_existing_soil():
     )
     
     if result:
-        with open('test_update_soil.apsimx', 'r') as f:
+        with open('test_update_soil.apsimx', 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         zone = data['Children'][0]['Children'][0]
@@ -175,10 +174,9 @@ def test_update_existing_soil():
         print(f"  - Layers changed: 2 → {len(soil['Children'][0]['Thickness'])}")
         print(f"  - New coordinates: ({soil['Latitude']}, {soil['Longitude']})")
         
-        return True
     else:
         print("✗ Failed to update soil")
-        return False
+        pytest.fail("the soil converter did not update the existing .apsimx")
 
 
 def test_deep_profile():
@@ -219,10 +217,9 @@ def test_deep_profile():
     if result:
         print(f"\n✓ Deep soil profile created successfully!")
         print(f"  - Total depth: {sum(depths)} mm ({sum(depths)/1000:.2f} m)")
-        return True
     else:
         print("✗ Failed to create deep soil profile")
-        return False
+        pytest.fail("the soil converter wrote no deep-profile .apsimx")
 
 
 if __name__ == "__main__":

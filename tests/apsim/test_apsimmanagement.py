@@ -58,7 +58,7 @@ def test_basic_management():
     )
     
     # Verify file
-    with open(output_file, 'r') as f:
+    with open(output_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
     print(f"\n✓ File created: {output_file}")
@@ -107,7 +107,7 @@ def test_rule_based_sowing():
     )
     
     # Verify
-    with open(output_file, 'r') as f:
+    with open(output_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
     sowing_op = data['Children'][0]['Children'][0]
@@ -159,7 +159,7 @@ def test_multiple_fertilizations():
     )
     
     # Verify
-    with open(output_file, 'r') as f:
+    with open(output_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
     print(f"\n✓ Multiple fertilizations created")
@@ -201,7 +201,7 @@ def test_irrigation_operations():
         toolbox_name="Irrigation Management"
     )
     
-    with open(output_file, 'r') as f:
+    with open(output_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
     print(f"\n✓ Irrigation operations created")
@@ -262,7 +262,7 @@ def test_complete_crop_cycle():
         toolbox_name="Soybean Complete Cycle"
     )
     
-    with open(output_file, 'r') as f:
+    with open(output_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
     print(f"\n✓ Complete cycle created")

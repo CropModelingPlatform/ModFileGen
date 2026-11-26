@@ -14,6 +14,7 @@ sys.path.insert(0, str(repo_root / "src"))
 
 from modfilegen import GlobalVariables
 from modfilegen.Converter.ApsimConverter import main
+import pytest
 
 def test_apsim_converter():
     """Test APSIM converter with GlobalVariables configuration."""
@@ -35,11 +36,11 @@ def test_apsim_converter():
     # Verify databases exist
     if not os.path.exists(master_input):
         print(f"❌ ERROR: MasterInput database not found: {master_input}")
-        return False
+        pytest.skip("the developer databases under tests/data are not available")
     
     if not os.path.exists(model_dict):
         print(f"❌ ERROR: ModelDictionary database not found: {model_dict}")
-        return False
+        pytest.skip("the developer databases under tests/data are not available")
     
     print("✓ Databases found\n")
     
@@ -77,13 +78,12 @@ def test_apsim_converter():
             if len(files) > 20:
                 print(f"  ... and {len(files) - 20} more files")
         
-        return True
         
     except Exception as e:
         print(f"\n❌ Error during conversion: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(f"the APSIM conversion raised: {e}")
 
 
 if __name__ == "__main__":

@@ -56,7 +56,7 @@ def example_1_simple_file_creation():
         print(f"✓ Success! Weather file created: {weather_file}")
         
         # Show first few lines
-        with open(weather_file, 'r') as f:
+        with open(weather_file, 'r', encoding='utf-8') as f:
             lines = f.readlines()[:15]
         print("\nFirst 15 lines of weather file:")
         print("".join(lines))
@@ -123,7 +123,7 @@ def example_2_content_caching():
         output_file = str(output_dir / idsim / "weather.met")
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             f.write(content)
         
         print(f"     ✓ Created: {output_file}")

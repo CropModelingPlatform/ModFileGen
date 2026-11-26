@@ -88,4 +88,10 @@ modfilegen = ["*.json", "*.xml", "*.ini", "*.shp", "*.yml", "config/outputs/*.ym
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    # A test that returns instead of asserting still passes, so the warning
+    # was hiding tests that checked nothing. Make it a hard error rather
+    # than noise at the end of every run.
+    "error::pytest.PytestReturnNotNoneWarning",
+]
 addopts = "--maxfail=2 -rf --cov=modfilegen --cov-report=term-missing"

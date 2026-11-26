@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 
 from modfilegen.Converter.ApsimConverter.apsimweatherconverter import ApsimWeatherConverter
 import pandas as pd
+import pytest
 
 
 def test_basic_weather_conversion():
@@ -75,10 +76,9 @@ def test_basic_weather_conversion():
         print(f"✓ Test passed! Weather file created successfully.")
         print(f"  Location: {os.path.abspath(output_file)}")
         print("=" * 60)
-        return True
     else:
         print("✗ Test failed! Could not generate weather file.")
-        return False
+        pytest.fail("the weather converter produced no content")
 
 
 def test_minimal_weather_data():
@@ -122,10 +122,9 @@ def test_minimal_weather_data():
         print("=" * 60)
         print(f"✓ Test passed! Minimal weather file created successfully.")
         print("=" * 60)
-        return True
     else:
         print("✗ Test failed!")
-        return False
+        pytest.fail("the weather converter produced no content")
 
 
 if __name__ == "__main__":

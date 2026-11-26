@@ -15,6 +15,7 @@ repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root / "src"))
 
 from modfilegen.Converter.ApsimConverter import ApsimInitConverter
+import pytest
 
 
 def test_init_with_parameters():
@@ -46,7 +47,7 @@ def test_init_with_parameters():
         assert output_file.exists(), f"Output file not created: {output_file}"
         
         # Parse and verify JSON structure
-        with open(output_file, 'r') as f:
+        with open(output_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         assert data["$type"] == "Models.Core.Folder, Models"
@@ -94,13 +95,12 @@ def test_init_with_parameters():
         print("✓ Nitrogen initialization verified")
         print("✓ Residue initialization verified")
         print("\n✅ TEST 1 PASSED")
-        return True
         
     except Exception as e:
         print(f"\n❌ TEST 1 FAILED: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        raise
 
 
 def test_init_with_database():
@@ -117,7 +117,7 @@ def test_init_with_database():
         print(f"⚠️ TEST 2 SKIPPED: Database files not found")
         print(f"   Looking for: {db_path}")
         print(f"           and: {md_path}")
-        return True
+        pytest.skip("prerequisites for this test are not available")
     
     try:
         # Connect to databases
@@ -136,7 +136,7 @@ def test_init_with_database():
         
         if df.empty:
             print("⚠️ TEST 2 SKIPPED: No simulations in database")
-            return True
+            pytest.skip("prerequisites for this test are not available")
         
         row = df.iloc[0]
         
@@ -158,7 +158,7 @@ def test_init_with_database():
         
         # Verify file was created
         if output_file.exists():
-            with open(output_file, 'r') as f:
+            with open(output_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
             print(f"✓ Created initialization file: {output_file}")
@@ -172,13 +172,12 @@ def test_init_with_database():
         
         mi_conn.close()
         md_conn.close()
-        return True
         
     except Exception as e:
         print(f"\n❌ TEST 2 FAILED: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        raise
 
 
 def test_init_default_values():
@@ -205,7 +204,7 @@ def test_init_default_values():
         assert output_file.exists(), f"Output file not created: {output_file}"
         
         # Parse and verify JSON structure
-        with open(output_file, 'r') as f:
+        with open(output_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         assert data["$type"] == "Models.Core.Folder, Models"
@@ -215,13 +214,12 @@ def test_init_default_values():
         print(f"✓ File size: {output_file.stat().st_size} bytes")
         print(f"✓ Used default values for most parameters")
         print("\n✅ TEST 3 PASSED")
-        return True
         
     except Exception as e:
         print(f"\n❌ TEST 3 FAILED: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        raise
 
 
 def test_init_with_crop_state():
@@ -252,7 +250,7 @@ def test_init_with_crop_state():
         assert output_file.exists(), f"Output file not created: {output_file}"
         
         # Parse and verify JSON structure
-        with open(output_file, 'r') as f:
+        with open(output_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         # Check for manager node with crop initialization
@@ -274,13 +272,12 @@ def test_init_with_crop_state():
         print(f"✓ File size: {output_file.stat().st_size} bytes")
         print(f"✓ Crop initial state included (LAI=0.5, Biomass=200)")
         print("\n✅ TEST 4 PASSED")
-        return True
         
     except Exception as e:
         print(f"\n❌ TEST 4 FAILED: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        raise
 
 
 def main():

@@ -11,6 +11,22 @@ from modfilegen.Converter.ApsimConverter.apsimweatherconverter import ApsimWeath
 import pandas as pd
 
 
+REQUIRED = ["year", "day", "radn", "maxt", "mint", "rain"]
+
+
+def met_columns(content):
+    """The columns the generated .met declares, 'code' aside.
+
+    These tests used to end on `return True`, asserting nothing: the
+    converter could have dropped or invented a column and they would still
+    have passed, while pytest warned about the return value.
+    """
+    for line in content.splitlines():
+        if line.split()[:1] == ["year"]:
+            return [name for name in line.split() if name != "code"]
+    raise AssertionError("the generated .met has no column header")
+
+
 def test_only_required_columns():
     """Test with only required columns (no vp, pan, or wind)"""
     print("\n" + "="*70)
@@ -32,7 +48,7 @@ def test_only_required_columns():
         latitude=45.0, longitude=-93.0
     )
     print(content)
-    return True
+    assert met_columns(content) == REQUIRED + []
 
 
 def test_with_vp_only():
@@ -57,7 +73,7 @@ def test_with_vp_only():
         latitude=45.0, longitude=-93.0
     )
     print(content)
-    return True
+    assert met_columns(content) == REQUIRED + ['vp']
 
 
 def test_with_pan_only():
@@ -82,7 +98,7 @@ def test_with_pan_only():
         latitude=45.0, longitude=-93.0
     )
     print(content)
-    return True
+    assert met_columns(content) == REQUIRED + ['pan']
 
 
 def test_with_wind_only():
@@ -107,7 +123,7 @@ def test_with_wind_only():
         latitude=45.0, longitude=-93.0
     )
     print(content)
-    return True
+    assert met_columns(content) == REQUIRED + ['wind']
 
 
 def test_with_vp_and_pan():
@@ -133,7 +149,7 @@ def test_with_vp_and_pan():
         latitude=45.0, longitude=-93.0
     )
     print(content)
-    return True
+    assert met_columns(content) == REQUIRED + ['vp', 'pan']
 
 
 def test_with_all_optional():
@@ -160,7 +176,7 @@ def test_with_all_optional():
         latitude=45.0, longitude=-93.0
     )
     print(content)
-    return True
+    assert met_columns(content) == REQUIRED + ['vp', 'pan', 'wind']
 
 
 if __name__ == "__main__":

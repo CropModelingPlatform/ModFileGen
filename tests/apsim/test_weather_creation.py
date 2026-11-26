@@ -16,6 +16,7 @@ repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root / "src"))
 
 from modfilegen.Converter.ApsimConverter.apsimweatherconverter import ApsimWeatherConverter
+import pytest
 
 
 def test_export_content():
@@ -36,7 +37,7 @@ def test_export_content():
         print(f"❌ Test databases not found")
         print(f"   Expected: {db_master}")
         print(f"   Expected: {db_model}")
-        return False
+        pytest.skip("the developer databases under tests/data are not available")
     
     mi_conn = sqlite3.connect(str(db_master))
     md_conn = sqlite3.connect(str(db_model))
@@ -53,7 +54,7 @@ def test_export_content():
     df = mi_conn.execute("SELECT idPoint, StartYear FROM SimUnitList LIMIT 1").fetchone()
     if not df:
         print("❌ No simulations found in database")
-        return False
+        pytest.skip("the database holds no simulation to convert")
     
     idPoint, year = df
     directory_path = f"/dummy/{idPoint}/{year}"
@@ -76,7 +77,7 @@ def test_export_content():
     # Verify content
     if not content:
         print("❌ No content generated")
-        return False
+        pytest.fail("the weather converter produced no content")
     
     lines = content.split('\n')
     print(f"✓ Content generated: {len(lines)} lines")
@@ -91,10 +92,9 @@ def test_export_content():
     
     if has_header and has_columns and has_data:
         print("✓ Content structure valid")
-        return True
     else:
         print("❌ Content structure invalid")
-        return False
+        pytest.fail("the generated .met is missing its header or data rows")
 
 
 def test_export_to_file():
@@ -115,7 +115,7 @@ def test_export_to_file():
     if not db_master.exists() or not db_model.exists():
         print(f"❌ Test databases not found")
         print(f"   Expected: {db_master}")
-        return False
+        pytest.skip("the developer databases under tests/data are not available")
     
     mi_conn = sqlite3.connect(str(db_master))
     md_conn = sqlite3.connect(str(db_model))
@@ -131,7 +131,7 @@ def test_export_to_file():
     df = mi_conn.execute("SELECT idPoint, StartYear FROM SimUnitList LIMIT 3").fetchall()
     if not df:
         print("❌ No simulations found in database")
-        return False
+        pytest.skip("the database holds no simulation to convert")
     
     os.makedirs(output_dir, exist_ok=True)
     
@@ -159,7 +159,7 @@ def test_export_to_file():
             # Verify file exists and has content
             if os.path.exists(result):
                 file_size = os.path.getsize(result)
-                with open(result, 'r') as f:
+                with open(result, 'r', encoding='utf-8') as f:
                     lines = len(f.readlines())
                 print(f"  ✓ File size: {file_size} bytes, {lines} lines")
             else:
@@ -177,8 +177,8 @@ def test_export_to_file():
     
     for f in created_files:
         print(f"     - {os.path.basename(f)}")
-    
-    return len(created_files) == 3
+
+    assert len(created_files) == 3
 
 
 def test_comparison():
@@ -198,7 +198,7 @@ def test_comparison():
     
     if not db_master.exists() or not db_model.exists():
         print(f"❌ Test databases not found")
-        return False
+        pytest.skip("the developer databases under tests/data are not available")
     
     mi_conn = sqlite3.connect(str(db_master))
     md_conn = sqlite3.connect(str(db_model))
@@ -236,22 +236,21 @@ def test_comparison():
     
     if not result:
         print("❌ Failed to create file")
-        return False
+        pytest.fail("export_to_file wrote no weather file")
     
     # Read file content
-    with open(output_file, 'r') as f:
+    with open(output_file, 'r', encoding='utf-8') as f:
         content2 = f.read()
     
     # Compare
     if content1 == content2:
         print("✓ Both methods produce IDENTICAL content")
         print(f"  Content length: {len(content1)} bytes")
-        return True
     else:
         print("❌ Contents DIFFER")
         print(f"  Method 1 (export): {len(content1)} bytes")
         print(f"  Method 2 (export_to_file): {len(content2)} bytes")
-        return False
+        pytest.fail("export and export_to_file disagree on the generated content")
 
 
 def main():

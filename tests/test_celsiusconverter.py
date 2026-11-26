@@ -21,8 +21,8 @@ GlobalVariables["dbCelsius"] = celsius_f
 
 
 def test_celsiusconverter():
+    """A smoke test: the conversion runs end to end without raising."""
     celsiusconverter.main()
-    return 0
 
 if __name__ == "__main__":
     test_celsiusconverter()
