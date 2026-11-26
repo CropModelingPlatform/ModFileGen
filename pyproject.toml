@@ -34,12 +34,23 @@ dependencies = [
     "pandas>=1.5",
     "joblib>=1.0",
     "PyYAML>=6.0",
+    # Imported at module level by the STICS v9 and DSSAT converters, which
+    # log their resident memory. It was missing here, so a clean install
+    # could not even import them.
+    "psutil>=5.9",
 ]
 
 [project.optional-dependencies]
+# Only modfilegen.utils.stics_txt_to_xml needs this, and it imports it
+# lazily with an explicit message, so it stays out of the base install.
+xlsx = [
+    "openpyxl>=3.1",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov",
+    "pytest-mock",
+    "openpyxl>=3.1",
     "flake8",
     "build",
     "twine",
