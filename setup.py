@@ -13,8 +13,8 @@ from setuptools import setup, find_namespace_packages
 
 
 short_descr = "generated required files for crop models."
-readme = open('README.rst').read()
-history = open('HISTORY.rst').read()
+readme = open('README.rst', encoding='utf-8').read()
+history = open('HISTORY.rst', encoding='utf-8').read()
 url = "https://github.com/CropModelingPlatform/ModFileGen"
 
 description = ''
@@ -23,7 +23,7 @@ generate required files for crop models.
 '''
 
 _version = {}
-with open("src/modfilegen/version.py") as fp:
+with open("src/modfilegen/version.py", encoding="utf-8") as fp:
     exec(fp.read(), _version)
     version = _version["__version__"]
 
