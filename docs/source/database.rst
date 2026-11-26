@@ -84,6 +84,36 @@ One row per simulation unit: a point, a soil, a management, initial conditions
 and options over a period. A successive simulation (rotation) is one row whose
 management has several seasons.
 
+.. _season boundaries:
+
+**Where one season ends.** A season ends **the day before the next season's
+first cultural operation**, not the day before its sowing. A season owns the
+operations that precede its own sowing, so a pre-sowing tillage, irrigation
+or fertilisation falls inside the season of the crop it is meant for rather
+than on the previous crop's bare-soil phase.
+
+The first season starts on the simulation's own start date, whatever its
+first operation; the last ends on the simulation's end date. Between them
+the windows are contiguous: every day is simulated once, and none is left
+out.
+
+Both STICS v11 and DSSAT apply this rule, and produce identical windows
+from the same database. On the fixture's maize-peanut-maize rotation, where
+season 2 irrigates ten days before sowing (``IrrigationFOperations
+.DIrrigation`` = -10):
+
+================  ====================  ====================
+Season            Starts                Ends
+================  ====================  ====================
+1 (maize)         2000-120, the start   2001-139
+2 (peanut)        2001-140              2002-149
+3 (maize)         2002-150              2002-350, the end
+================  ====================  ====================
+
+Season 1 therefore ends eleven days before season 2's sowing on 2001-150,
+not one. That gap is the measure of season 2's pre-sowing operations, and
+``tests/test_successive_season_boundaries.py`` holds both models to it.
+
 .. list-table::
    :header-rows: 1
    :widths: 20 12 68

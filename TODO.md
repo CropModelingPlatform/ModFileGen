@@ -160,6 +160,17 @@ and linked to an issue or pull request when one exists.
   2 blocks, `SM` = 1, 2, 1, the maize seasons sharing the first and the
   peanut taking the second for its `MEPHO`, exactly the shape of
   `UFGA7803.SQX`.
+- [x] The season boundary rule is confirmed and documented: a season ends the
+  day before the **next season's first cultural operation**, not the day
+  before its sowing. Both converters already implemented it, in the same
+  shape (`dssatsuccessiveconverter.py:571`,
+  `sticssuccessiveconverter.py:258`), and each had a test of its own; what
+  nothing pinned was that the two agree.
+  `tests/test_successive_season_boundaries.py` now holds both models to the
+  rule and to each other, and `docs/source/database.rst` states it with the
+  fixture's eleven-day gap worked through -- season 2 irrigates ten days
+  before sowing, so season 1 closes eleven days before it, which is
+  invisible unless someone goes looking.
 - [ ] The rotation's peanut season fails inside DSSAT v4.8, error 100 key
   `DEMAND` for `CRGRO048`, and `MEPHO` is not the cause. Tested with the
   override in place: `R`, `C` and `L` all give `DEMAND`, as do `SYMBI = Y`
