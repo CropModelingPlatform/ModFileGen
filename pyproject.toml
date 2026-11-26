@@ -71,7 +71,10 @@ Repository = "https://github.com/CropModelingPlatform/ModFileGen"
 Issues = "https://github.com/CropModelingPlatform/ModFileGen/issues"
 
 [project.scripts]
-gen = "modfilegen.main:main"
+agriscale = "modfilegen.cli:main"
+# The package name as a command too, since `pip install modfilegen` is what
+# puts it there.
+modfilegen = "modfilegen.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

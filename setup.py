@@ -64,8 +64,8 @@ setup_kwds = dict(
 # #}
 # change setup_kwds below before the next pkglts tag
 
-# Entry points now defined in pyproject.toml [project.scripts]
-# setup_kwds["entry_points"] = {"console_scripts": ["gen = modfilegen.main:main"]}
+# Entry points are defined in pyproject.toml [project.scripts]:
+# agriscale and modfilegen, both pointing at modfilegen.cli:main.
 
 # do not change things below
 # {# pkglts, pysetup.call

@@ -43,12 +43,19 @@ class Engine:
     also tried with ``.exe`` appended.
     """
 
-    def __init__(self, label, config_key, env_var, commands=(), locations=()):
+    def __init__(
+        self, label, config_key, env_var, commands=(), locations=(),
+        companions=(),
+    ):
         self.label = label
         self.config_key = config_key
         self.env_var = env_var
         self.commands = tuple(commands)
         self.locations = tuple(locations)
+        #: Glob patterns an engine needs beside its executable. Copying the
+        #: binary alone is a common mistake: DSSAT reads DSSATPRO for its
+        #: data directories, and APSIM needs its 61 assemblies.
+        self.companions = tuple(companions)
 
     def candidates(self):
         for location in self.locations:
@@ -95,6 +102,7 @@ ENGINES = {
             # The directory the official Windows installer defaults to.
             r"C:\DSSAT47\DSCSM047.EXE",
         ),
+        companions=("DSSATPRO.*",),
     ),
     "dssat_v48": Engine(
         label="DSSAT v4.8",
@@ -106,6 +114,7 @@ ENGINES = {
             "/usr/share/dssatv48/dscsm048",
             r"C:\DSSAT48\DSCSM048.EXE",
         ),
+        companions=("DSSATPRO.*",),
     ),
     "apsim": Engine(
         label="APSIM Next Generation",
@@ -116,6 +125,7 @@ ENGINES = {
             "apsim/Models",
             "/usr/share/apsim/Models",
         ),
+        companions=("*.dll",),
     ),
     "celsius_v32": Engine(
         label="CELSIUS V32",
@@ -126,6 +136,7 @@ ENGINES = {
             "celsiusV32/CelsiusCli",
             "/usr/share/celsiusV32/CelsiusCli",
         ),
+        companions=("*.dll",),
     ),
     "celsius_v3": Engine(
         label="CELSIUS v3",
@@ -150,6 +161,37 @@ def _configured(engine):
     return GlobalVariables.get(engine.config_key) or None
 
 
+def _resolve(name, configured=None):
+    """The executable for ``name``, and which link of the cascade found it."""
+    engine = ENGINES[name]
+
+    for value, origin in (
+        (configured, "given"),
+        (_configured(engine), f"GlobalVariables[{engine.config_key!r}]"),
+        (os.environ.get(engine.env_var), engine.env_var),
+    ):
+        if not value:
+            continue
+        value = str(value)
+        # A full path is taken as given. A bare name goes through PATH, so
+        # "Models" becomes Models.exe on Windows; if that fails the name is
+        # returned unchanged, and the failure names what was looked for.
+        if Path(value).is_file():
+            return value, origin
+        return shutil.which(value) or value, origin
+
+    for command in engine.commands:
+        found = shutil.which(command)
+        if found:
+            return found, "PATH"
+
+    for candidate in engine.candidates():
+        if candidate.is_file():
+            return str(candidate), "install location"
+
+    return engine.fallback, "not found"
+
+
 def resolve(name, configured=None):
     """The executable to run for engine ``name``.
 
@@ -158,28 +200,49 @@ def resolve(name, configured=None):
     comes back as its command name, so the run fails where it is reported
     with the model's own error handling.
     """
+    return _resolve(name, configured)[0]
+
+
+def inspect(name, configured=None):
+    """What is known about engine ``name`` on this machine.
+
+    Reports where it was found and whether it could actually run, so a
+    student can tell "ModFileGen cannot see my install" from "the install
+    itself is incomplete" without reading any code. Nothing is executed:
+    starting a crop model to ask whether it exists would do real work.
+    """
     engine = ENGINES[name]
+    executable, origin = _resolve(name, configured)
+    path = Path(executable)
 
-    explicit = configured or _configured(engine) or os.environ.get(engine.env_var)
-    if explicit:
-        explicit = str(explicit)
-        # A full path is taken as given. A bare name goes through PATH, so
-        # "Models" becomes Models.exe on Windows; if that fails the name is
-        # returned unchanged, and the failure names what was looked for.
-        if Path(explicit).is_file():
-            return explicit
-        return shutil.which(explicit) or explicit
+    exists = path.is_file()
+    missing = []
+    if exists:
+        # The companions sit next to the real file, not next to the symlink
+        # that points at it: /usr/bin/dssat is a link into /usr/share/dssat,
+        # where DSSATPRO actually lives.
+        home = path.resolve().parent
+        for pattern in engine.companions:
+            if not any(home.glob(pattern)):
+                missing.append(pattern)
 
-    for command in engine.commands:
-        found = shutil.which(command)
-        if found:
-            return found
+    if not exists:
+        status = "missing"
+    elif missing:
+        status = "incomplete"
+    elif os.name != "nt" and not os.access(path, os.X_OK):
+        status = "not executable"
+    else:
+        status = "ok"
 
-    for candidate in engine.candidates():
-        if candidate.is_file():
-            return str(candidate)
-
-    return engine.fallback
+    return {
+        "engine": name,
+        "label": engine.label,
+        "executable": executable,
+        "origin": origin,
+        "status": status,
+        "missing_companions": missing,
+    }
 
 
 def describe(name):
