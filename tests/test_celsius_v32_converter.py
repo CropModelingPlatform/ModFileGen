@@ -392,8 +392,26 @@ with sqlite3.connect(db) as c:
 
 
 def make_fake_engine(tmp_path, body=FAKE_ENGINE):
+    """A stand-in for the CELSIUS V32 executable.
+
+    Windows has no shebang, so a chmod +x script there is not an executable
+    at all and CreateProcess refuses it with "%1 is not a valid Win32
+    application". The script therefore gets a .bat wrapper on Windows, which
+    is also what a real engine shipped as a wrapper would look like.
+    """
+    import os
     import stat
     import sys
+
+    script = tmp_path / "fake_celsius.py"
+    script.write_text(body.format(python=sys.executable), encoding="utf-8")
+
+    if os.name == "nt":
+        engine = tmp_path / "fake_celsius.bat"
+        engine.write_text(
+            f'@"{sys.executable}" "{script}" %*\n', encoding="utf-8"
+        )
+        return str(engine)
 
     engine = tmp_path / "fake_celsius"
     engine.write_text(body.format(python=sys.executable), encoding="utf-8")

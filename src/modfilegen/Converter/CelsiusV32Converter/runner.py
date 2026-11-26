@@ -11,7 +11,7 @@ import uuid
 
 import pandas as pd
 
-from modfilegen import GlobalVariables, engines
+from modfilegen import GlobalVariables, engine_runner, engines
 from modfilegen.coordinate_resolver import CoordinateResolver
 from modfilegen.output_configuration import OutputConfiguration
 from modfilegen.Converter.CelsiusConverter.summary_output import (
@@ -289,11 +289,14 @@ def _run_worker(executable, worker_database):
     log_path = worker_database.with_suffix(".log")
     with open(log_path, "w", encoding="utf-8") as log:
         try:
-            completed = subprocess.run(
-                [executable, str(worker_database)],
+            completed = engine_runner.run_engine(
+                executable,
+                [worker_database],
+                cwd=worker_database.parent,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                text=True,
+                timeout=None,
+                check=False,
             )
         except FileNotFoundError as error:
             raise engines.not_found("celsius_v32", executable) from error
@@ -322,7 +325,10 @@ def run_model(celsius_database, executable=None, workers=1):
     parts = _partition_chains(chains, workers) if chains else []
     if len(parts) <= 1:
         try:
-            subprocess.run([executable, str(celsius_database)], check=True, text=True)
+            engine_runner.run_engine(
+                executable, [celsius_database], cwd=celsius_database.parent,
+                stdout=None, stderr=None, timeout=None,
+            )
         except FileNotFoundError as error:
             raise engines.not_found("celsius_v32", executable) from error
         return

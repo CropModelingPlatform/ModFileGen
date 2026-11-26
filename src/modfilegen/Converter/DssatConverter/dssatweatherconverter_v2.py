@@ -3,6 +3,7 @@ from sqlite3 import Connection
 import os
 import pandas as pd
 import traceback
+from modfilegen.paths import path_parts
 
 
 def is_leap_year(year):
@@ -51,7 +52,7 @@ def rollover_weather_rows(rows, weather_year):
 
 
 def parse_weather_directory(directory_path):
-    parts = directory_path.split(os.sep)
+    parts = path_parts(directory_path)
     site = parts[-3]
     year = int(parts[-2])
     management = parts[-1][:4].upper()

@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import traceback
 import shutil
+from modfilegen.paths import path_parts
 
 class SticsFicplt1Converter(Converter):
     def __init__(self):
@@ -11,7 +12,7 @@ class SticsFicplt1Converter(Converter):
 
     def export(self, directory_path, master_input_connection, pltfolder, usmdir):
         file_name = "ficplt1.txt"
-        ST = directory_path.split(os.sep)
+        ST = path_parts(directory_path)
         sq = """SELECT SimUnitList.idsim as idsim, ListCultOption.FicPlt as fic 
         FROM (ListCultOption INNER JOIN (ListCultivars INNER JOIN CropManagement ON ListCultivars.IdCultivar = CropManagement.Idcultivar) ON ListCultOption.CodePSpecies = ListCultivars.CodePSpecies) INNER JOIN SimUnitList ON CropManagement.idMangt = SimUnitList.idMangt where idSim= '%s' ;"""%(ST[-3])   
         df_sim = pd.read_sql(sq, master_input_connection)

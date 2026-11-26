@@ -2,6 +2,7 @@ from modfilegen.converter import Converter
 from sqlite3 import Connection
 import os
 import pandas as pd
+from modfilegen.paths import path_parts
 
 class SticsTempoparConverter(Converter):
     def __init__(self):
@@ -11,7 +12,7 @@ class SticsTempoparConverter(Converter):
         file_name = "tempopar.sti"
         fileContent = ""
         # split directory_path in ST
-        ST = directory_path.split(os.sep)
+        ST = path_parts(directory_path)
         output_path = os.path.join(*ST[:-2])
         fetchAllQuery = """SELECT SimUnitList.idsim, SimulationOptions.StressW_YN, SimulationOptions.StressN_YN, SimulationOptions.StressP_YN, SimulationOptions.StressK_YN
          FROM SimUnitList INNER JOIN SimulationOptions ON SimUnitList.IdOption = SimulationOptions.IdOptions Where idsim ='%s';"""%(ST[-3])

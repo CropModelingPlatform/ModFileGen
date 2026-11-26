@@ -5,6 +5,7 @@ from sqlite3 import Connection
 import os
 import pandas as pd
 import traceback
+from modfilegen.paths import path_parts
 
 class SticsParamSolConverter(Converter):
     def __init__(self):
@@ -13,7 +14,7 @@ class SticsParamSolConverter(Converter):
     def export(self, directory_path, ModelDictionary_Connection, master_input_connection, usmdir):
         file_name = "param.sol"
         fileContent = ""
-        ST = directory_path.split(os.sep)
+        ST = path_parts(directory_path)
         id_sim = ST[-3]
         T = "Select  Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'stics') And ([Table] = 'st_param_sol'));"
         DT = pd.read_sql_query(T,ModelDictionary_Connection)

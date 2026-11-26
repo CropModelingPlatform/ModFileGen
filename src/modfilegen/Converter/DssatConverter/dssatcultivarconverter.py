@@ -5,6 +5,7 @@ import pandas as pd
 import traceback
 import re
 import shutil
+from modfilegen.paths import path_parts
 
 
 DSSAT_CULTIVAR_SUFFIXES = {
@@ -31,7 +32,7 @@ class DssatCultivarConverter(Converter):
         super().__init__()
 
     def export(self, directory_path, master_input_connection, pltfolder, usmdir, dssat_version="v47"):
-        ST = directory_path.split(os.sep)   
+        ST = path_parts(directory_path)   
         sq = """SELECT CropManagement.idMangt as idMangt, ListCultOption.CG as crop, ListCultOption.DSCROP as dscrop 
         FROM (ListCultOption INNER JOIN (ListCultivars INNER JOIN CropManagement ON ListCultivars.IdCultivar = CropManagement.Idcultivar) ON ListCultOption.CodePSpecies = ListCultivars.CodePSpecies) where idMangt= '%s' ;"""%(ST[-1])   
         df_sim = pd.read_sql(sq, master_input_connection)

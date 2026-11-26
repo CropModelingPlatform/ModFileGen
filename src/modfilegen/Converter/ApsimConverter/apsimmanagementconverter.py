@@ -19,6 +19,13 @@ import os
 import sys
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Union
+from modfilegen.paths import path_parts
+
+#: Month abbreviations APSIM expects, independent of the machine's locale.
+APSIM_MONTHS = (
+    "jan", "feb", "mar", "apr", "may", "jun",
+    "jul", "aug", "sep", "oct", "nov", "dec",
+)
 
 # Handle imports for both package and standalone execution
 try:
@@ -822,7 +829,7 @@ namespace Models
             DataFrame with management operations
         """
         # Extract simulation ID from directory path
-        ST = directory_path.split(os.sep)
+        ST = path_parts(directory_path)
         sim_id = ST[-3] if len(ST) >= 3 else ST[-1]
         
         # Query basic crop management data
@@ -991,10 +998,17 @@ namespace Models
             base_date = datetime(year, 1, 1)
             target_date = base_date + timedelta(days=int(day_of_year) - 1)
             
-            # Format as d-mmm (e.g., 15-nov)
-            return target_date.strftime('%-d-%b').lower()
-        except:
-            return '1-jan'  # Fallback
+            # Format as d-mmm (e.g. 15-nov), without strftime. '%-d' is a
+            # glibc extension that raises ValueError on Windows, where the
+            # bare except below used to turn every date into 1 January
+            # without saying a word, and '%b' follows LC_TIME, which would
+            # write "mai" on a French machine where APSIM wants "may".
+            return f"{target_date.day}-{APSIM_MONTHS[target_date.month - 1]}"
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"Cannot build an APSIM date from day_of_year={day_of_year!r} "
+                f"and year={year!r}"
+            ) from error
     
     def _infer_operation_types(self, df: pd.DataFrame) -> pd.DataFrame:
         """Infer operation types from column names if not explicitly provided."""

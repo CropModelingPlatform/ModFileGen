@@ -3,6 +3,7 @@ from sqlite3 import Connection
 import os
 import pandas as pd
 import traceback
+from modfilegen.paths import path_parts
 
 class SticsClimatConverter(Converter):
     def __init__(self):
@@ -19,7 +20,7 @@ class SticsClimatConverter(Converter):
     ):
         file_name = "climat.txt"
         fileContent = ""
-        ST = directory_path.split(os.sep)        
+        ST = path_parts(directory_path)        
         Site = ST[-2]
         idsim = ST[-3]
         if start_year is None or end_year is None:

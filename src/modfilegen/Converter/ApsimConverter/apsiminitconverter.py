@@ -19,6 +19,7 @@ import pandas as pd
 from modfilegen import text_files
 import json
 import traceback
+from modfilegen.paths import path_parts
 
 
 class ApsimInitConverter(Converter):
@@ -52,7 +53,7 @@ class ApsimInitConverter(Converter):
             str: JSON content for the initialization
         """
         # Parse simulation info from directory path
-        ST = directory_path.split(os.sep)
+        ST = path_parts(directory_path)
         id_sim = ST[-3] if len(ST) >= 3 else ST[-1]
         id_point = ST[-2] if len(ST) >= 2 else None
         

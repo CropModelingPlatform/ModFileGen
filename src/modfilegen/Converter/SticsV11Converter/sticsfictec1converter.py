@@ -3,6 +3,7 @@ from sqlite3 import Connection
 import os
 import pandas as pd
 import traceback
+from modfilegen.paths import path_parts
 
 
 def _is_leap_year(year):
@@ -84,7 +85,7 @@ class SticsFictec1Converter(Converter):
         file_name = "fictec1.txt"
         file_name2 = "fictec2.txt"
         fileContent = ""
-        ST = directory_path.split(os.sep)
+        ST = path_parts(directory_path)
              
         fetchAllQuery = """SELECT SimUnitList.idsim, SimUnitList.idMangt, SimUnitList.StartYear, SimUnitList.EndYear, SimUnitList.EndDay, Soil.SoilTotalDepth, ListCultivars.idcultivarStics, CropManagement.*
         FROM Soil INNER JOIN (ListCultivars INNER JOIN (CropManagement INNER JOIN SimUnitList ON CropManagement.idMangt = SimUnitList.idMangt)

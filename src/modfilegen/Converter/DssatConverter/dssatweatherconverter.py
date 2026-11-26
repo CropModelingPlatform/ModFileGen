@@ -3,6 +3,7 @@ from sqlite3 import Connection
 import os
 import pandas as pd
 import traceback
+from modfilegen.paths import path_parts
 
 
 def format_dssat_weather_date(year, day_of_year):
@@ -39,7 +40,7 @@ class DssatweatherConverter(Converter):
         try:
             #print("Exporting Dssat Weather")
             fileContent = ""
-            ST = directory_path.split(os.sep)        
+            ST = path_parts(directory_path)        
             Site = ST[-3]
             Year = ST[-2]
             # get the four first elements of ST[-1] to get the IdMngt

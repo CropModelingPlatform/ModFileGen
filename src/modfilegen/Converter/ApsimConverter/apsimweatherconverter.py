@@ -31,6 +31,7 @@ from modfilegen import text_files
 import os
 import pandas as pd
 import traceback
+from modfilegen.paths import path_parts
 
 
 class ApsimWeatherConverter(Converter):
@@ -64,7 +65,7 @@ class ApsimWeatherConverter(Converter):
         file_content = ""
         
         # Parse site and year from directory path
-        ST = directory_path.split(os.sep)
+        ST = path_parts(directory_path)
         Site = ST[-2]
         Year = ST[-1]
         

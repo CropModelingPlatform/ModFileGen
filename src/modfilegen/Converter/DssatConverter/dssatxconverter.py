@@ -5,6 +5,7 @@ import pandas as pd
 import traceback
 import shutil
 
+from modfilegen.paths import path_parts
 from modfilegen.Converter.DssatConverter.dssatsoilconverter import (
     LAYER_TABLE,
     fine_earth_fraction,
@@ -1509,7 +1510,7 @@ class DssatXConverter(Converter):
         dssat_version="v47",
         parameter_resolver=None,
     ):
-        ST = directory_path.split(os.sep)
+        ST = path_parts(directory_path)
         idSim = ST[-2]
         idMangt = ST[-1]
         T = "Select Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],[Default_Value_Datamill]) As dv From Variables Where ((model = 'dssat') And ([Table] like 'dssat_x_%'));"

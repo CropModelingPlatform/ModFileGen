@@ -38,6 +38,7 @@ from multiprocessing import Pool
 import pandas as pd
 from time import time
 import traceback
+from modfilegen.paths import path_parts
 from joblib import Parallel, delayed, parallel_backend   
 import gc
 import calendar
@@ -271,7 +272,7 @@ def process_chunk(*args):
                 weathertable[climid] = r
                 del weatherconverter  # Free converter
             else:
-                ST = simPath.split(os.sep)
+                ST = path_parts(simPath)
                 Mngt = ST[-1][:4]
                 Year = ST[-2]
                 

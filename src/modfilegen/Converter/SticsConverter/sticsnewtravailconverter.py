@@ -3,6 +3,7 @@ from sqlite3 import Connection
 import os
 import pandas as pd
 import traceback
+from modfilegen.paths import path_parts
 
 class SticsNewTravailConverter(Converter):
     def __init__(self):
@@ -11,7 +12,7 @@ class SticsNewTravailConverter(Converter):
     def export(self, directory_path, ModelDictionary_Connection, master_input_connection, usmdir):
         file_name = "new_travail.usm"
         fileContent = ""
-        ST = directory_path.split(os.sep)
+        ST = path_parts(directory_path)
         fetchAllQuery = """SELECT SimUnitList.idsim, SimUnitList.idPoint as idPoint, SimUnitList.StartYear,SimUnitList.StartDay,SimUnitList.EndDay,SimUnitList.Endyear, SimUnitList.idsoil, SimUnitList.idMangt, SimUnitList.idIni, Coordinates.LatitudeDD, CropManagement.sowingdate,
         ListCultivars.SpeciesName FROM InitialConditions INNER JOIN ((ListCultivars INNER JOIN CropManagement ON ListCultivars.IdCultivar = CropManagement.Idcultivar) INNER JOIN (Coordinates INNER
         Join SimUnitList ON Coordinates.idPoint = SimUnitList.idPoint) ON CropManagement.idMangt = SimUnitList.idMangt) ON InitialConditions.idIni = SimUnitList.idIni Where idsim = '%s';"""%(ST[-3])

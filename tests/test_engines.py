@@ -120,7 +120,9 @@ def test_path_is_searched_for_engines_with_a_unique_name(
     global_variables["dssatExecutable"] = ""
     monkeypatch.setenv("PATH", str(bindir))
 
-    assert engines.resolve("dssat_v47") == str(target)
+    # shutil.which returns the PATHEXT spelling, which is upper case on
+    # Windows, so compare the way the filesystem does.
+    assert os.path.normcase(engines.resolve("dssat_v47")) == os.path.normcase(str(target))
 
 
 def test_stics_is_never_taken_from_path(
@@ -204,7 +206,7 @@ def test_an_explicit_bare_name_goes_through_path(
     target = on_path(bindir, "Models")
     monkeypatch.setenv("PATH", str(bindir))
 
-    assert engines.resolve("apsim", configured="Models") == str(target)
+    assert os.path.normcase(engines.resolve("apsim", configured="Models")) == os.path.normcase(str(target))
 
 
 # --- guidance -------------------------------------------------------------

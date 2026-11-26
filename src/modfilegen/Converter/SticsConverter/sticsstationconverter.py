@@ -2,6 +2,7 @@ from modfilegen.converter import Converter
 from sqlite3 import Connection
 import os
 import pandas as pd
+from modfilegen.paths import path_parts
 
 class SticsStationConverter(Converter):
     def __init__(self):
@@ -10,7 +11,7 @@ class SticsStationConverter(Converter):
     def export(self, directory_path, ModelDictionary_Connection, master_input_connection, rap, var, prof, usmdir):
         file_name = "station.txt"
         fileContent = ""
-        ST = directory_path.split(os.sep)
+        ST = path_parts(directory_path)
         T = "Select  Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'stics') And ([Table] = 'st_station'));"
         DT = pd.read_sql_query(T,ModelDictionary_Connection)
         fetchAllQuery = """SELECT SimUnitList.idsim, Coordinates.altitude, Coordinates.latitudeDD FROM Coordinates INNER JOIN SimUnitList ON Coordinates.idPoint = SimUnitList.idPoint Where idsim ='%s';"""%(ST[-3])

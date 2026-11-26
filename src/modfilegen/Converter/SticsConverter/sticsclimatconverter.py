@@ -3,6 +3,7 @@ from sqlite3 import Connection
 import os
 import pandas as pd
 import traceback
+from modfilegen.paths import path_parts
 
 class SticsClimatConverter(Converter):
     def __init__(self):
@@ -11,7 +12,7 @@ class SticsClimatConverter(Converter):
     def export(self, directory_path, ModelDictionary_Connection, master_input_connection, usmdir):
         file_name = "climat.txt"
         fileContent = ""
-        ST = directory_path.split(os.sep)        
+        ST = path_parts(directory_path)        
         Site = ST[-2]
         Year = ST[-1]
         T = "Select   Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'stics') And ([Table]= 'st_climat'));"
