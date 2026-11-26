@@ -50,6 +50,18 @@ def executable(path, content="#!/bin/sh\nexit 0\n"):
     return path
 
 
+def on_path(directory, name):
+    """A fake engine that ``shutil.which`` will actually find.
+
+    On Windows PATH lookup only accepts the PATHEXT suffixes, so a file with
+    no extension is invisible to ``shutil.which`` there. The candidate paths
+    are a different matter: an extension-less file still exists on disk, so
+    the location tests below need no such treatment.
+    """
+    suffix = ".bat" if os.name == "nt" else ""
+    return executable(directory / (name + suffix))
+
+
 def test_every_engine_has_a_distinct_configuration_key():
     keys = [engine.config_key for engine in engines.ENGINES.values()]
     variables = [engine.env_var for engine in engines.ENGINES.values()]
@@ -104,11 +116,11 @@ def test_path_is_searched_for_engines_with_a_unique_name(
     global_variables, empty_path, monkeypatch, tmp_path
 ):
     bindir = tmp_path / "bin"
-    executable(bindir / "dssat")
+    target = on_path(bindir, "dssat")
     global_variables["dssatExecutable"] = ""
     monkeypatch.setenv("PATH", str(bindir))
 
-    assert engines.resolve("dssat_v47") == str(bindir / "dssat")
+    assert engines.resolve("dssat_v47") == str(target)
 
 
 def test_stics_is_never_taken_from_path(
@@ -120,7 +132,7 @@ def test_stics_is_never_taken_from_path(
     resolved by version-specific location only.
     """
     bindir = tmp_path / "bin"
-    executable(bindir / "stics_modulo")
+    on_path(bindir, "stics_modulo")
     monkeypatch.setenv("PATH", str(bindir))
     global_variables["sticsV9Executable"] = ""
     global_variables["sticsV11Executable"] = ""
@@ -189,7 +201,7 @@ def test_an_explicit_bare_name_goes_through_path(
 ):
     """So a configured "Models" becomes Models.exe on Windows."""
     bindir = tmp_path / "bin"
-    target = executable(bindir / "Models")
+    target = on_path(bindir, "Models")
     monkeypatch.setenv("PATH", str(bindir))
 
     assert engines.resolve("apsim", configured="Models") == str(target)
