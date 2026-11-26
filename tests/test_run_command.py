@@ -379,3 +379,111 @@ def test_two_runs_of_the_same_inputs_give_the_same_manifest(tmp_path):
         (directory / f"{identifier}_stics.csv").write_text("idsim,yield\na,1\n")
 
     assert run_command.manifest(first) == run_command.manifest(second)
+
+
+# --- the accounting --------------------------------------------------------
+
+
+def test_a_model_without_a_survey_is_not_counted(inputs):
+    """STICS declines nothing, so there is nothing to reconcile."""
+    assert run_command.MODELS["stics"].survey is None
+    assert (
+        run_command.crop_seasons(inputs["master_input"], run_command.MODELS["stics"],
+                                 "standard")
+        is None
+    )
+
+
+def test_the_survey_is_reported_before_the_run(tmp_path):
+    stream = io.StringIO()
+
+    run_command.report_the_survey(
+        {"requested": 10, "applicable": 1, "declined": {"an association": 6,
+                                                        "a rotation": 3}},
+        stream,
+    )
+
+    output = stream.getvalue()
+    assert "10 crop-seasons requested" in output
+    assert "6 declined: an association" in output
+    assert "3 declined: a rotation" in output
+    assert "1 to simulate" in output
+
+
+def test_the_produced_rows_are_counted_from_the_summary(tmp_path):
+    (tmp_path / "abc_dssat.csv").write_text("IdSim,Yield\na,1\nb,2\n")
+
+    assert run_command.count_produced(tmp_path, "dssat") == 2
+
+
+def test_an_intermediate_chunk_is_not_mistaken_for_the_summary(tmp_path):
+    """DSSAT leaves chunk_0.csv in the output directory."""
+    (tmp_path / "abc_dssat.csv").write_text("IdSim\na\n")
+    (tmp_path / "chunk_0.csv").write_text("IdSim\na\nb\nc\n")
+
+    assert run_command.count_produced(tmp_path, "dssat") == 1
+
+
+def test_an_uncountable_output_is_admitted_not_guessed(tmp_path):
+    """A wrong count would fail a good run, which is worse than not checking."""
+    assert run_command.count_produced(tmp_path, "dssat") is None
+
+    (tmp_path / "a_dssat.csv").write_text("IdSim\na\n")
+    (tmp_path / "b_dssat.csv").write_text("IdSim\nb\n")
+    assert run_command.count_produced(tmp_path, "dssat") is None
+
+
+def test_a_run_short_of_its_applicable_work_fails(
+    inputs, engine_is_ready, monkeypatch, global_variables
+):
+    """The point of the whole exercise: a defect must not look like a
+    declined simulation."""
+    from modfilegen import Converter
+
+    monkeypatch.setattr(
+        run_command, "crop_seasons",
+        lambda database, model, mode: {
+            "requested": 10, "applicable": 3, "declined": {"an association": 7},
+        },
+    )
+
+    def produce_too_little():
+        with open(os.path.join(inputs["out"], "x_dssat.csv"), "w") as stream:
+            stream.write("IdSim\na\n")
+
+    monkeypatch.setattr(Converter, "run_dssat", produce_too_little)
+    stream = io.StringIO()
+
+    status = run_command.perform(
+        options(inputs, model="dssat", version="v48"), stream
+    )
+
+    assert status == 1
+    assert "1 of 3 crop-seasons were produced" in stream.getvalue()
+
+
+def test_a_run_that_produced_its_applicable_work_passes(
+    inputs, engine_is_ready, monkeypatch, global_variables
+):
+    from modfilegen import Converter
+
+    monkeypatch.setattr(
+        run_command, "crop_seasons",
+        lambda database, model, mode: {
+            "requested": 10, "applicable": 1, "declined": {"an association": 9},
+        },
+    )
+
+    def produce():
+        with open(os.path.join(inputs["out"], "x_dssat.csv"), "w") as stream:
+            stream.write("IdSim\na\n")
+
+    monkeypatch.setattr(Converter, "run_dssat", produce)
+    stream = io.StringIO()
+
+    status = run_command.perform(
+        options(inputs, model="dssat", version="v48"), stream
+    )
+
+    assert status == 0
+    assert "1 crop-seasons produced" in stream.getvalue()

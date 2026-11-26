@@ -116,6 +116,41 @@ directories, and, on Windows, a short path -- a deep output directory plus
 a long USM name reaches the 260-character limit, and the engine then fails
 on a path it was handed rather than on its inputs.
 
+What ran, and what did not
+--------------------------
+
+A ``SimUnitList`` row is not a simulation. A management carries seasons and
+plants, so five rows can ask for ten **crop-seasons**. Counting rows
+understates the work, which is how a silently truncated rotation went
+unnoticed.
+
+The command states the accounting before it starts and checks it
+afterwards::
+
+    10 crop-seasons requested
+      6 declined: DSSAT cannot simulate an association: management
+        'Mgt1M0_135' has several plants in season(s) 1 ...
+      3 declined: DSSAT standard mode cannot simulate a rotation ...
+    1 to simulate
+    1 crop-seasons produced.
+
+*Declined* means outside the model's domain: DSSAT grows one crop at a
+time, so an association is not its business, and in standard mode neither
+is a rotation. That is not a failure, and the command still reports
+success.
+
+*Missing* is different. The converters catch a per-simulation failure,
+print it and carry on, so without this count a real defect looked exactly
+like declined work and the command reported success either way. When fewer
+crop-seasons are produced than the survey said were applicable, the run
+fails::
+
+    1 of 3 crop-seasons were produced. The missing ones are not declined
+    work: see the errors above.
+
+Only DSSAT declines anything today. For a model that can simulate whatever
+the database asks, nothing is counted and nothing is printed.
+
 Comparing two runs
 ------------------
 

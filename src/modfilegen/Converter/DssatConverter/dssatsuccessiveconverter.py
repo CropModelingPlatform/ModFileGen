@@ -37,6 +37,7 @@ from modfilegen.soil_repository import SoilDataRepository
 from modfilegen.output_configuration import OutputConfiguration
 from .summary_output import transform_summary_dataframe
 from . import dssatcultivarconverter, dssatsoilconverter, dssatxconverter
+from .applicability import NotApplicable
 from . import dssatweatherconverter_v2 as dssatweatherconverter
 from . import dssatrunner
 from .dssatconverter import export as prepare_sqlite_indexes
@@ -422,9 +423,10 @@ def successive_managements(row, master_input_connection):
     duplicated_seasons = duplicated_seasons[duplicated_seasons > 1]
     if not duplicated_seasons.empty:
         seasons = ", ".join(str(value) for value in duplicated_seasons.index)
-        raise ValueError(
-            "DSSAT successive currently supports one PlantOrder per SeasonOrder; "
-            f"management {row['idMangt']!r} has multiple plants in season(s) {seasons}"
+        raise NotApplicable(
+            "DSSAT cannot simulate an association: management "
+            f"{row['idMangt']!r} has several plants in season(s) {seasons}. "
+            "DSSAT grows one crop at a time; use STICS for intercropping."
         )
     return dataframe.to_dict(orient="records")
 
@@ -1265,6 +1267,13 @@ def process_successive_group(
         if dt == 1:
             os.remove(summary)
         return dataframe, daily
+    except NotApplicable as reason:
+        # Outside DSSAT's domain, not a defect. Raising left the Parallel
+        # call dead on the first association, so a database holding one
+        # intercrop produced nothing at all -- not even the rotations DSSAT
+        # runs perfectly well. Declining this group lets the others through.
+        print(f"Skipping {group_key(group)}: {reason}", flush=True)
+        return pd.DataFrame(), pd.DataFrame()
     except subprocess.CalledProcessError as error:
         print(f"DSSAT failed with return code {error.returncode} for group {group_key(group)}", flush=True)
         traceback.print_exc()

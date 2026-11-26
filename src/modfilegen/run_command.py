@@ -25,6 +25,7 @@ class Model:
         self, label, dispatch, engine_by_version, default_version=None,
         version_key=None, mode_key=None, modes=("standard",),
         needs_cultivars=False, needs_celsius_db=False, needs_package=False,
+        survey=None,
     ):
         self.label = label
         #: Name of the dispatcher in modfilegen.Converter, called as-is.
@@ -38,6 +39,10 @@ class Model:
         self.needs_cultivars = needs_cultivars
         self.needs_celsius_db = needs_celsius_db
         self.needs_package = needs_package
+        #: "module:function" counting the crop-seasons this model can run.
+        #: Only DSSAT declines work today; a model without one is assumed
+        #: able to simulate everything the database asks for.
+        self.survey = survey
 
     @property
     def versions(self):
@@ -67,6 +72,7 @@ MODELS = {
         mode_key="dssat_mode",
         modes=("standard", "successive"),
         needs_cultivars=True,
+        survey="modfilegen.Converter.DssatConverter.applicability:survey",
     ),
     "apsim": Model(
         label="APSIM Next Generation",
@@ -231,6 +237,55 @@ def write_manifest(destination, rows, stream=None):
         stream.write(f"{len(rows)} files listed in {destination}\n")
 
 
+def crop_seasons(database, model, mode):
+    """What the database asks of this model, and what it can take on.
+
+    A ``SimUnitList`` row is not a simulation: a management carries seasons
+    and plants, so five rows asked for ten crop-seasons on the fixture this
+    was written against. Counting rows understated the work by half, which
+    is how a truncated rotation passed unnoticed.
+    """
+    import sqlite3
+    from importlib import import_module
+
+    if not model.survey:
+        return None
+    module_name, _, function_name = model.survey.partition(":")
+    survey = getattr(import_module(module_name), function_name)
+    # Read-only: a survey must not touch what it is measuring.
+    link = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        return survey(link, mode)
+    finally:
+        link.close()
+
+
+def report_the_survey(counts, stream):
+    stream.write(f"{counts['requested']} crop-seasons requested\n")
+    for reason, count in sorted(counts["declined"].items()):
+        stream.write(f"  {count} declined: {reason}\n")
+    stream.write(f"{counts['applicable']} to simulate\n")
+
+
+def count_produced(output, model_name):
+    """Rows in the summary this run wrote, or None when it cannot be told.
+
+    Returning None rather than guessing: a wrong count would turn a good
+    run into a failure, which is worse than not checking.
+    """
+    import csv
+
+    summaries = [
+        path
+        for path in Path(output).glob(f"*_{model_name}*.csv")
+        if not path.name.startswith("chunk")
+    ]
+    if len(summaries) != 1:
+        return None
+    with open(summaries[0], newline="", encoding="utf-8") as handle:
+        return sum(1 for _ in csv.DictReader(handle))
+
+
 def perform(arguments, stream):
     """Configure and start one run. Returns the process exit status."""
     from importlib import import_module
@@ -262,6 +317,10 @@ def perform(arguments, stream):
     GlobalVariables.update(values)
     stream.write(f"Writing to {output}\n")
 
+    counts = crop_seasons(values["dbMasterInput"], model, arguments.mode)
+    if counts is not None:
+        report_the_survey(counts, stream)
+
     dispatch = getattr(import_module("modfilegen.Converter"), model.dispatch)
     try:
         dispatch()
@@ -279,6 +338,26 @@ def perform(arguments, stream):
         write_manifest(
             arguments.manifest, manifest(output, skip=[values["tempDir"]]), stream
         )
+
+    # The converters catch a per-simulation failure, print it and carry on,
+    # so a defect used to look exactly like a declined simulation and the
+    # command reported success either way.
+    if counts is not None:
+        produced = count_produced(output, arguments.model)
+        if produced is None:
+            stream.write(
+                f"Could not count what was produced; expected "
+                f"{counts['applicable']} crop-seasons.\n"
+            )
+        elif produced < counts["applicable"]:
+            stream.write(
+                f"{produced} of {counts['applicable']} crop-seasons were "
+                "produced. The missing ones are not declined work: see the "
+                "errors above.\n"
+            )
+            return 1
+        else:
+            stream.write(f"{produced} crop-seasons produced.\n")
     return 0
 
 

@@ -106,14 +106,29 @@ and linked to an issue or pull request when one exists.
   DSSAT converters for the same shape: this one was the only `.values :`
   spelling, but `.values[0]` on a multi-row frame is the same class of bug and
   standard mode reads every season of a rotation management.
-- [ ] `agriscale run` returns 0 when individual simulations fail. The
-  converters catch a per-simulation exception, print it to stderr and carry
-  on, so 3 of 5 simulations can be skipped and the command still reports
-  success. For DSSAT the three skipped ones are legitimately not applicable
-  (associations), but a real defect would look identical. The converters need
-  to report how many simulations ran against how many were requested, and
-  `agriscale run` should fail when the two differ for any reason other than a
-  documented exclusion. This is what CI will depend on.
+- [x] `agriscale run` reconciles what was asked with what ran.
+  `modfilegen.Converter.DssatConverter.applicability` answers, without
+  running anything, how many crop-seasons a database asks for and how many
+  DSSAT can take on; the command prints that before starting and fails when
+  fewer are produced than were applicable. A `SimUnitList` row is not a
+  simulation -- five rows ask for ten crop-seasons on the fixture -- which is
+  how a truncated rotation passed unnoticed. `NotApplicable` is the
+  distinction: declined work is not a defect, and still exits 0.
+- [ ] Standard DSSAT now refuses a rotation instead of simulating season 1
+  and dropping the rest, and successive DSSAT skips an association instead of
+  killing the whole `Parallel` call on the first one. Give STICS the same
+  survey hook, so its runs are reconciled too: it declines nothing today, but
+  the count would have caught the `eaures` defect.
+- [ ] The rotation fails inside DSSAT v4.8 itself, exit 99, on its peanut
+  season: `ERROR.OUT` gives error 100, key `DEMAND`, for `CRGRO048`. The
+  genotype chain is sound (`IB0001` resolves to ecotype `PN0007`, present in
+  `PNGRO048.ECO`, and both crops' files are copied into the sequence
+  directory). The suspect is the simulation options, written the same for
+  every crop: `NITRO` comes from `SimUnitList.StressN_YN` (off in the
+  fixture) and `SYMBI` from the dictionary field `ISWSYM`, a constant `N`. A
+  legume under CROPGRO is the one case where symbiotic fixation matters, so a
+  blanket `N` is suspect. Needs an agronomic decision: make `ISWSYM` depend
+  on the crop, or set it per simulation.
 - [ ] DSSAT leaves `chunk_0.csv` in the output directory rather than in the
   scratch directory; it is an intermediate, and it shows up in the manifest.
 - [ ] Decide whether the summary CSV should keep its `uuid4` prefix. It
