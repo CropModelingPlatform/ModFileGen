@@ -133,13 +133,23 @@ and linked to an issue or pull request when one exists.
   field of `dssat_x_simulation_method` can be overridden -- which one is the
   user's decision. Verified: an override of `MEPHO` on season 2 yields two
   blocks with `PHOTO R` and `PHOTO L` and `SM` = 1, 2, 1.
-- [ ] Several `SIMULATION CONTROLS` blocks require an `@  AUTOMATIC
-  MANAGEMENT` section per block, even when no `MANAGEMENT` switch is `A`.
-  With one block DSSAT tolerates its absence; with two it fails reading the
-  file, error 5010 key `IPSIM` at the second block's `GENERAL` line. Adding
-  the section to each level by hand made that error disappear, so the writer
-  must emit it per level regardless of the switches. Until then a run with
-  two distinct control blocks cannot start.
+- [x] `@  AUTOMATIC MANAGEMENT` is written for every `SIMULATION CONTROLS`
+  level, whatever the `MANAGEMENT` switches say. It was gated on a switch
+  being `A`, and the fixture's are `R` and `M`, so no level ever had it; with
+  one level DSSAT tolerates that, with several it fails reading the file
+  (error 5010, key `IPSIM`). Writing it always exposed a defect it had been
+  hiding: `PWDINF` and `PWDINL` hold 5161 and 5175, `yyddd` dates from a
+  template whose year was 05, and the code prefixed them with the
+  simulation's year as if they were days -- `005161`, six digits in a
+  six-wide field, so the two dates ran together. Only the day is kept now,
+  and the line matches the official example column for column.
+- [ ] The automatic harvest window carries each season's own end date
+  (`HLAST`), so a rotation gets one control block per season even when
+  nothing else differs. That is what the data says and DSSAT accepts it, but
+  the official `UFGA7803.SQX` shares one window across its blocks. Worth
+  deciding whether a sequence's automatic windows should be season-specific
+  or sequence-wide; the answer is agronomic, and the values are inert unless
+  a switch is `A`.
 - [ ] The rotation's peanut season fails inside DSSAT v4.8, error 100 key
   `DEMAND` for `CRGRO048`, and `MEPHO` is not the cause. Tested with the
   override in place: `R`, `C` and `L` all give `DEMAND`, as do `SYMBI = Y`

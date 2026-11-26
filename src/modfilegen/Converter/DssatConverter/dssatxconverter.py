@@ -1073,8 +1073,15 @@ def writeBlockEndFile( idSim, modelDictionary_Connection, master_input_connectio
         dssat_tableName1 = "dssat_x_simulation_outputs"
         fileContent += writeBlockoutputs(dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection, dailyoutput)
         fileContent += "\n"
-        #z = 0
-        if Dv_planting=="A" or Dv_irri=="A" or Dv_ferti=="A" or Dv_hari=="A" or Dv_resi=="A":
+        # Always written, whatever the MANAGEMENT switches say. DSSAT reads
+        # the SIMULATION CONTROLS level by level, and with several levels it
+        # fails on a level that has no AUTOMATIC MANAGEMENT section: error
+        # 5010, key IPSIM, at the next level's GENERAL line. With a single
+        # level its absence is tolerated, which is why this only surfaced
+        # once a rotation needed two. DSSAT's own sequence examples carry
+        # the section on every level, including ones that use none of it,
+        # and the values are inert unless a switch asks for them.
+        if True:
             fileContent += "@  AUTOMATIC MANAGEMENT"
             fileContent += "\n"
             dssat_tableName1 = "dssat_x_automatic_planting"
@@ -1343,6 +1350,28 @@ def writeBlockoutputs(dssat_tableName, dssat_tableId, idSim, modelDictionary_Con
     return fileContent
 
 
+def planting_window_date(value, start_year):
+    """A ``yyddd`` planting-window bound from a dictionary default.
+
+    The dictionary carries DSSAT template values -- ``PWDINF`` 5161 and
+    ``PWDINL`` 5175 -- which are ``yyddd`` dates from a workspace whose year
+    was 05, not days of year. Prefixing them with the simulation's year gave
+    ``005161``: six digits in a six-wide field, so the two dates ran
+    together and neither was a date at all. Only the day survives the
+    conversion; the year is this simulation's.
+
+    Both spellings work, since 161 and 5161 give the same day. A day past
+    365 rolls into the next year, which is how a window straddling New Year
+    is written.
+    """
+    day = int(value) % 1000
+    year = int(start_year)
+    if day > 365:
+        day -= 365
+        year += 1
+    return f"{str(year)[2:4]}{day:03d}"
+
+
 def writeBlockAutomaticPlanting(dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection, master_input_connection):
     fileContent = ""
     siteColumnsHeader = "@N PLANTING    PFRST PLAST PH2OL PH2OU PH2OD PSTMX PSTMN"
@@ -1360,16 +1389,13 @@ def writeBlockAutomaticPlanting(dssat_tableName, dssat_tableId, idSim, modelDict
     Dv = rw["dv"].values[0]
     fileContent += v_fmt_simulation["PLANTING"].format(Dv.strip())
     rw = DT[DT["Champ"] == "PWDINF"]
-    Dv = rw["dv"].values[0]
-    fileContent += v_fmt_simulation["PFRST"].format(str(dataTable["StartYear"].values[0])[2:4] + format(int(Dv), "03"))
-    #fileContent += v_fmt_simulation["PFRST"].format(format(int(Dv), "05"))
+    fileContent += v_fmt_simulation["PFRST"].format(
+        planting_window_date(rw["dv"].values[0], dataTable["StartYear"].values[0])
+    )
     rw = DT[DT["Champ"] == "PWDINL"]
-    Dv = rw["dv"].values[0]
-    if int(Dv) > 365: 
-        fileContent += v_fmt_simulation["PLAST"].format(str(int(dataTable["StartYear"].values[0])+1)[2:4] + format(int(Dv) - 365, "03"))
-    else:
-        fileContent += v_fmt_simulation["PLAST"].format(str(dataTable["StartYear"].values[0])[2:4] + format(int(Dv), "03"))
-    #fileContent += v_fmt_simulation["PLAST"].format(format(int(Dv), "05"))
+    fileContent += v_fmt_simulation["PLAST"].format(
+        planting_window_date(rw["dv"].values[0], dataTable["StartYear"].values[0])
+    )
     rw = DT[DT["Champ"] == "SWPLTL"]
     Dv = rw["dv"].values[0]
     fileContent += v_fmt_simulation["PH2OL"].format(int(Dv))
