@@ -252,38 +252,75 @@ def inspect(name, configured=None):
     }
 
 
-def _example_path():
-    """What a path looks like, in the spelling of the platform talked to.
+def _startup_file():
+    """The file a POSIX shell reads on login, so the setting lasts.
 
-    A function, not a constant: a module-level value would be fixed at
-    import and no test could ask what the other platform's message says.
+    This is the counterpart of Windows' setx: without it the advice sets a
+    variable that dies with the terminal, and the engine goes missing again
+    tomorrow with nothing to show why.
     """
-    if _WINDOWS:
-        return r"C:\path\to\the\executable.exe"
-    return "/path/to/the/executable"
+    shell = os.environ.get("SHELL", "")
+    if shell.endswith("zsh"):
+        return "~/.zshrc"
+    if shell.endswith(("csh", "tcsh")):
+        return "~/.cshrc"
+    return "~/.bashrc"
 
 
-def set_variable(env_var):
-    """Shell lines that set ``env_var``, in this platform's own syntax.
+def _in_a_posix_shell():
+    """Whether the shell around us takes ``export``, even on Windows.
 
-    "export VAR=/path/to/it" is wrong twice over on Windows: cmd.exe has no
-    export, and the path spelling is not its own. A student followed that
-    advice literally -- ``set export VAR=...``, which defines a variable
-    called "export VAR" -- and got the same message back unchanged. Telling
-    someone to run a line that cannot work is worse than saying nothing, so
-    the guidance speaks the shell of the machine it is printed on.
+    Git Bash, MSYS and a WSL prompt all run on Windows yet speak sh. Judging
+    by ``os.name`` alone would hand those users cmd syntax they cannot run.
     """
     if not _WINDOWS:
-        return [f"export {env_var}={_example_path()}"]
+        return True
+    if os.environ.get("MSYSTEM") or os.environ.get("WSL_DISTRO_NAME"):
+        return True
+    return os.environ.get("SHELL", "").replace("\\", "/").rsplit("/", 1)[-1] in (
+        "bash", "zsh", "sh", "dash", "bash.exe", "sh.exe"
+    )
+
+
+def _posix_lines(env_var, path):
+    return [
+        f"bash/zsh:   export {env_var}={path}   (this shell only)",
+        f"            echo 'export {env_var}={path}' >> {_startup_file()}"
+        "   (lasting)",
+    ]
+
+
+def _windows_lines(env_var, path):
     # Quoting the whole assignment keeps a stray trailing space out of the
     # value, which is cmd.exe's classic way of silently doing nothing. setx
     # writes to the user's own profile, so it needs no administrator rights,
     # but it only reaches windows opened afterwards.
     return [
-        f'cmd:        set "{env_var}={_example_path()}"   (this window only)',
-        f'            setx {env_var} "{_example_path()}"  (lasting, new windows)',
-        f'PowerShell: $env:{env_var} = "{_example_path()}"',
+        f'cmd:        set "{env_var}={path}"   (this window only)',
+        f'            setx {env_var} "{path}"  (lasting, new windows)',
+        f'PowerShell: $env:{env_var} = "{path}"',
     ]
+
+
+def set_variable(env_var):
+    """Shell lines that set ``env_var``, the likeliest shell first.
+
+    "export VAR=/path/to/it" is wrong twice over on cmd.exe: there is no
+    export, and the path spelling is not its own. A student followed that
+    advice literally -- ``set export VAR=...``, which defines a variable
+    named "export VAR" -- and got the same advice back unchanged. Advice
+    that cannot work is worse than none.
+
+    Every spelling is listed, because the shell cannot be known for certain:
+    Git Bash and WSL run sh on Windows, and a detection that guessed wrong
+    and showed nothing else would strand the reader. Ordering is the guess;
+    completeness is the guarantee.
+    """
+    posix = _posix_lines(env_var, "/path/to/the/executable")
+    windows = _windows_lines(env_var, r"C:\path\to\the\executable.exe")
+    if _in_a_posix_shell():
+        return posix + ([] if not _WINDOWS else windows)
+    return windows + posix
 
 
 def guidance(name):

@@ -222,37 +222,71 @@ def test_the_guidance_names_the_key_and_the_variable(name):
     assert engine.env_var in message
 
 
-def test_the_guidance_speaks_the_shell_of_the_machine(monkeypatch):
-    """A student ran the Unix line on cmd.exe because the message said to.
+@pytest.fixture
+def a_bare_cmd_prompt(monkeypatch):
+    """Windows with nothing that hints at a POSIX shell."""
+    monkeypatch.setattr(engines, "_WINDOWS", True)
+    for variable in ("SHELL", "MSYSTEM", "WSL_DISTRO_NAME"):
+        monkeypatch.delenv(variable, raising=False)
+
+
+def test_cmd_syntax_comes_first_on_a_cmd_prompt(a_bare_cmd_prompt):
+    """A student ran the Unix line on cmd.exe because it was listed alone.
 
     `set export VAR=...` defines a variable called "export VAR", so nothing
     is found and the message that caused it is printed again unchanged.
     """
+    lines = engines.set_variable("MODFILEGEN_STICS_V11")
+
+    assert lines[0].startswith("cmd:")
+    assert 'set "MODFILEGEN_STICS_V11=' in lines[0]
+
+
+def test_every_shell_is_still_offered_on_windows(a_bare_cmd_prompt):
+    """Git Bash and WSL run sh on Windows; detection only picks the order."""
+    text = "\n".join(engines.set_variable("MODFILEGEN_STICS_V11"))
+
+    assert "export MODFILEGEN_STICS_V11=" in text
+    assert "setx MODFILEGEN_STICS_V11" in text
+    assert "$env:MODFILEGEN_STICS_V11" in text
+
+
+def test_git_bash_on_windows_is_told_to_export(monkeypatch):
     monkeypatch.setattr(engines, "_WINDOWS", True)
+    monkeypatch.setenv("MSYSTEM", "MINGW64")
 
-    message = engines.describe("stics_v11")
+    lines = engines.set_variable("MODFILEGEN_STICS_V11")
 
-    assert "export" not in message
-    assert 'set "MODFILEGEN_STICS_V11=' in message
-    assert "/path/to" not in message
-
-
-def test_the_windows_guidance_offers_a_lasting_setting(monkeypatch):
-    """setx needs no administrator rights, which is the whole constraint."""
-    monkeypatch.setattr(engines, "_WINDOWS", True)
-
-    message = engines.describe("stics_v11")
-
-    assert "setx MODFILEGEN_STICS_V11" in message
+    assert lines[0].startswith("bash/zsh:")
+    # cmd stays available: the same window can call either.
+    assert any(line.startswith("cmd:") for line in lines)
 
 
-def test_the_posix_guidance_stays_posix(monkeypatch):
+def test_posix_is_not_told_about_cmd(monkeypatch):
     monkeypatch.setattr(engines, "_WINDOWS", False)
 
-    message = engines.describe("stics_v11")
+    text = "\n".join(engines.set_variable("MODFILEGEN_STICS_V11"))
 
-    assert "export MODFILEGEN_STICS_V11=" in message
-    assert "setx" not in message
+    assert "export MODFILEGEN_STICS_V11=" in text
+    assert "setx" not in text
+    assert "$env:" not in text
+
+
+def test_posix_also_says_how_to_make_it_last(monkeypatch):
+    """The counterpart of setx, which POSIX had been missing."""
+    monkeypatch.setattr(engines, "_WINDOWS", False)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    text = "\n".join(engines.set_variable("MODFILEGEN_STICS_V11"))
+
+    assert "~/.bashrc" in text
+
+
+def test_the_startup_file_follows_the_shell(monkeypatch):
+    monkeypatch.setattr(engines, "_WINDOWS", False)
+    monkeypatch.setenv("SHELL", "/usr/bin/zsh")
+
+    assert "~/.zshrc" in "\n".join(engines.set_variable("MODFILEGEN_APSIM"))
 
 
 @pytest.mark.parametrize("name", sorted(engines.ENGINES))
