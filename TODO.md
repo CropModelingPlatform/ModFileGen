@@ -187,14 +187,24 @@ and linked to an issue or pull request when one exists.
   the database. Each remaining block should be checked for which of the two
   it is, since a block written from defaults looks entirely plausible in the
   file.
-- [ ] The rotation's peanut season fails inside DSSAT v4.8, error 100 key
-  `DEMAND` for `CRGRO048`, and `MEPHO` is not the cause. Tested with the
-  override in place: `R`, `C` and `L` all give `DEMAND`, as do `SYMBI = Y`
-  and `NITRO = Y` together with it. The genotype chain is sound (`IB0001`
-  resolves to ecotype `PN0007`, present in `PNGRO048.ECO`, and both crops'
-  files are copied into the sequence directory). Still to look at: the
-  planting details and harvest written for season 2, and whether `PNGRO048`
-  needs species files beyond `.CUL`, `.ECO` and `.SPE`.
+- [x] The rotation runs under DSSAT v4.8: exit 0, no `ERROR.OUT`, four
+  crop-seasons produced against four applicable. `DEMAND` was the harvest
+  date, not `MEPHO`: the season window was written as `HDATE`, so the peanut
+  stood for 364 days and CROPGRO hit its limit of 300 flower cohorts.
+  `DHarvest` now caps it -- the window end while it is shorter, sowing plus
+  `DHarvest` when the window is longer. The windows themselves do not move,
+  and DSSAT needs no continuity there since it starts the next run the day
+  after this one ends and simulates bare soil until that season's own sowing.
+- [ ] `NYERS` cannot bound a sequence at a season count. `CSM.for` uses it
+  once, at the first run, for `YRDOY_END = (year + NYERS) * 1000 + day - 1`,
+  then sets it to 1; the sequence ends only when that date is reached, and
+  the treatment list is cycled until then. The span is a whole number of
+  years from the start day, so slack after the last declared harvest cannot
+  be removed: 133 days on the fixture's rotation, and no integer `NYERS`
+  helps. The summary reader therefore drops a cycle sown past the
+  simulation's own end, which is what separates an engine repeat from a
+  one-season management legitimately repeating over the period. Worth
+  revisiting if DSSAT ever gains a sequence end date.
 - [ ] DSSAT leaves `chunk_0.csv` in the output directory rather than in the
   scratch directory; it is an intermediate, and it shows up in the manifest.
 - [ ] Decide whether the summary CSV should keep its `uuid4` prefix. It
