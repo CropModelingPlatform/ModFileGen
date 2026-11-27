@@ -149,9 +149,17 @@ again — which is then correct.
 `XX.SOL` stands and DSSAT estimates organic carbon from texture where none is
 given. The user confirmed that is expected behaviour.
 
-**Zero organic carbon on the second `XX.SOL` layer is the simple soil
-representation**, not a lost value: `Soil.SoilOption = 'simple'` writes two
-lines, the declared `OrganicC` in the top 30 cm and zero below.
+**`Soil` and `SoilLayers` are two tables with a deliberate relationship**,
+documented in `docs/source/database.rst`. `Soil` is one row per soil, the
+global description. `SoilOption = 'simple'` means that row is the whole
+description -- and the DSSAT converter turns it into **two** `XX.SOL` lines,
+the declared `OrganicC` in the top 30 cm and zero below, which is the
+representation and not a lost value. `SoilOption = 'detailed'` takes the
+general values from `Soil` and the per-layer ones from `SoilLayers`, with
+`Soil` as the fallback for a missing layer value. So the names the two
+tables share -- `bd`, `Wwp`, `Wfc`, `cf`, `OrganicC`, `pH`, `Ssat`, `Ssks`
+-- are that pairing, not a collision, and a column such as `Ldown` or
+`NumLayer` belongs to layers alone and can never appear in `Soil`.
 
 ## Traps that cost time here
 

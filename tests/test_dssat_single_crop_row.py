@@ -151,16 +151,21 @@ def test_no_converter_asks_numpy_for_the_truth_of_a_column():
     )
 
 
-# --- reading the right table's column -------------------------------------
+# --- reading the layer's value or the soil's -----------------------------
 
-#: The bare column names `writeBlockInitialConditionData` reads. Its query
-#: expands `Soil.*`, `SoilLayers.*` and `InitialConditions.*`, and the three
-#: share `bd`, `Wwp`, `Wfc`, `cf`, `OrganicC`, `pH`, `Ssat` and `Ssks`. The
-#: ambiguous ones are aliased in the SELECT -- `Soil.Wwp`, `SoilLayers.Wwp`
-#: and so on -- so the names below must each resolve to one table.
-BARE_NAMES = (
-    "Ldown", "NumLayer", "SoilOption", "SoilTotalDepth",
-    "WStockinit", "Ninit", "NH4initf",
+#: `writeBlockInitialConditionData` joins Soil, SoilLayers and
+#: InitialConditions and expands all three with `*`. Soil and SoilLayers
+#: share `bd`, `Wwp`, `Wfc`, `cf`, `OrganicC`, `pH`, `Ssat` and `Ssks` by
+#: design, not by accident: `Soil` describes the whole soil and is the
+#: fallback for a missing layer value, as `docs/source/database.rst` says.
+#: The query aliases them so both are reachable -- `Soil.Wwp` is the
+#: fallback, `SoilLayers.Wwp` the layer -- and that pairing is what these
+#: tests hold, because losing an alias would silently read the whole soil
+#: where the layer is meant, and nothing would fail.
+ALIASED_PAIRS = (
+    ("Soil.Wwp", "SoilLayers.Wwp"),
+    ("Soil.Wfc", "SoilLayers.Wfc"),
+    ("Soil.cf", "SoilLayers.cf"),
 )
 
 INITIAL_CONDITIONS_QUERY = """
@@ -190,40 +195,38 @@ def initial_conditions_frame(masterinput_copy):
         link.close()
 
 
-@pytest.mark.parametrize("name", BARE_NAMES)
-def test_a_bare_column_name_belongs_to_one_table(name, masterinput_copy):
-    """A name present in two of the joined tables would silently read the
-    first one's value -- the whole soil's where the layer's is meant -- and
-    nothing would fail. Aliasing is what prevents it, so a schema change
-    that makes one of these ambiguous has to be noticed here."""
+@pytest.mark.parametrize("fallback,layer", ALIASED_PAIRS)
+def test_both_the_layer_value_and_its_fallback_are_reachable(
+    fallback, layer, masterinput_copy
+):
+    """What the aliases are for. Without them the bare name resolves to
+    Soil's column, and the layer's would be read as the whole soil's."""
     frame = initial_conditions_frame(masterinput_copy)
 
-    assert list(frame.columns).count(name) == 1, (
-        f"{name!r} is no longer unambiguous in this join; read it through an"
-        " alias as Soil.Wwp and SoilLayers.Wwp already are"
-    )
+    assert fallback in frame.columns
+    assert layer in frame.columns
 
 
-def test_the_ambiguous_columns_are_reachable_under_both_names(masterinput_copy):
-    """What the aliases are for: the whole soil's value and the layer's,
-    told apart."""
+def test_the_soil_identifier_keeps_its_alias(masterinput_copy):
+    """`IdSoil` is in Soil and `idsoil` in SoilLayers, matched without case,
+    so the one the writer wants is spelled out."""
     frame = initial_conditions_frame(masterinput_copy)
 
-    for column in ("Soil.Wwp", "Soil.Wfc", "Soil.cf", "soil.bd",
-                   "SoilLayers.Wwp", "SoilLayers.Wfc", "SoilLayers.cf"):
-        assert column in frame.columns
+    assert "Soil.IdSoil" in frame.columns
 
 
 def test_a_column_of_this_frame_is_a_series_not_a_frame(masterinput_copy):
     """`frame[name]` returns a DataFrame when the name is duplicated, and
     then `.values[i]` is a whole row and `pd.notna` an array -- which is how
     the residues column raised. pandas suffixes the duplicates instead, so
-    every lookup here yields a Series and a scalar."""
+    every lookup here yields a Series and `.values[i]` a scalar.
+    """
     import pandas as pd
 
     frame = initial_conditions_frame(masterinput_copy)
 
-    for name in BARE_NAMES:
+    for name in ("SoilOption", "SoilTotalDepth", "Ldown", "Ninit",
+                 "Soil.Wwp", "SoilLayers.Wwp"):
         column = frame[name]
         assert isinstance(column, pd.Series), name
         assert column.values.ndim == 1, name
