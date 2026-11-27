@@ -3,7 +3,11 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "modfilegen"
+# The distribution is named after its command: `pip install agriscale`,
+# then `agriscale selftest`. The import package stays `modfilegen`, which
+# is what every module, notebook and document already refers to; renaming
+# it is a separate decision and a much larger change.
+name = "agriscale"
 dynamic = ["version"]
 description = "Generate and run model input files for different crop models based on a standardized shared database"
 readme = "README.rst"

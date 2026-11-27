@@ -56,7 +56,7 @@ You can install the package using pip (once distributed via PyPI):
 
 .. code-block:: bash
 
-    pip install modfilegen
+    pip install agriscale
 
 Or clone the repository and install locally:
 

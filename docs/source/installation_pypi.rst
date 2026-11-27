@@ -3,8 +3,12 @@ Installing and checking the package
 
 .. code-block:: bash
 
-    pip install modfilegen
+    pip install agriscale
     agriscale selftest
+
+The distribution is named after its command. The import package keeps its
+own name, so ``pip install agriscale`` and ``import modfilegen`` go
+together.
 
 ``selftest`` needs no model engine, which is the point: a student who has
 just installed has none yet. It builds the demo databases that ship with the

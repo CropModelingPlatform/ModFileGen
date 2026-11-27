@@ -126,3 +126,7 @@ ENV/
 # IDE settings
 .vscode/
 .idea/
+
+# Output of agriscale run and of the engines, never part of the package.
+/runs/
+/logs/
