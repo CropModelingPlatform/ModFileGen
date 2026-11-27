@@ -109,6 +109,15 @@ and linked to an issue or pull request when one exists.
   `PPOE` is not reachable: the writer takes it from `sdens` like `PPOP`, so
   an experiment whose emerged population differs from the sown one -- 5
   against 7 in `BRPI0202` -- needs a column rather than an override.
+- [x] An override naming the model file's column instead of the dictionary
+  `Champ` is refused with a message that says so and lists the Champ names
+  of that table. It already failed -- `KeyError: 'plrs'` -- which told
+  nobody which row, which table, or what to write instead. The three
+  loaders, soil, management and point, go through one helper now. A
+  `TargetTable` the converter does not declare in its overridable set is a
+  different case: its rows are never read, so such an override is inert
+  rather than refused, which is the quiet failure mode and is pinned by a
+  test.
 - [ ] Wire the export to the remaining override tables it does not honour.
   `OVERRIDABLE_TABLES` in `dssatxconverter.py` lists only
   `dssat_x_simulation_method`; every other writer reads

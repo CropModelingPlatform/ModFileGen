@@ -237,3 +237,85 @@ def test_the_old_name_of_the_accessor_still_works():
     """`simulation_overrides` is kept, since the mapping now covers more
     than the simulation controls."""
     assert dssatxconverter.simulation_overrides is dssatxconverter.crop_season_overrides
+
+
+# --- an override names the dictionary Champ -------------------------------
+
+
+def test_an_override_naming_the_file_column_is_refused(connections):
+    """The row spacing is `ROWSPC` in the dictionary and `PLRS` in the file.
+    The converter does that translation, so an override must use the Champ.
+    A row naming the file's spelling is refused rather than ignored."""
+    master, dictionary = connections
+
+    with pytest.raises(KeyError) as refusal:
+        resolver_with(master, dictionary, {
+            ("dssat_x_planting_detail", "PLRS", 1): "80",
+        })
+
+    message = str(refusal.value)
+    assert "PLRS" in message
+    assert "dssat_x_planting_detail" in message
+    assert "Champ" in message
+
+
+def test_the_refusal_lists_the_name_to_use_instead(connections):
+    """Being told what exists is the difference between a diagnosis and a
+    puzzle: the message carries `rowspc`, which is the right name."""
+    master, dictionary = connections
+
+    with pytest.raises(KeyError) as refusal:
+        resolver_with(master, dictionary, {
+            ("dssat_x_planting_detail", "PLRS", 1): "80",
+        })
+
+    assert "rowspc" in str(refusal.value)
+    assert "sdepht" in str(refusal.value)
+
+
+def test_a_row_for_a_table_no_writer_honours_is_simply_not_loaded(connections):
+    """The quiet failure mode, worth knowing: the prefetch asks only for the
+    tables the converter declares in OVERRIDABLE_TABLES, so a row naming
+    another one is never read. It is not refused and it has no effect --
+    which is why wiring the export matters before an import writes such
+    rows."""
+    master, dictionary = connections
+
+    resolver = resolver_with(master, dictionary, {
+        ("dssat_x_automatic_planting", "PWDINF", 1): "5161",
+    })
+    resolved = dssatxconverter.crop_season_overrides(resolver, MANAGEMENT, 1, 1)
+
+    assert "dssat_x_automatic_planting" not in resolved
+
+
+def test_a_declared_table_the_dictionary_does_not_define_says_so(connections):
+    """The other mistake: a TargetTable the converter asks for and the
+    ModelsDictionary has no rows for."""
+    master, dictionary = connections
+    master.execute(
+        "INSERT OR REPLACE INTO CropManagementParameterOverrides VALUES"
+        " (?, 1, 1, 'dssat', 'dssat_x_invented_table', 'WHATEVER', '1')",
+        (MANAGEMENT,),
+    )
+    master.commit()
+    resolver = ParameterResolver(dictionary, master)
+
+    with pytest.raises(KeyError, match="no 'dssat' parameter is defined"):
+        resolver.prefetch_management(
+            "dssat", ["dssat_x_invented_table"], [MANAGEMENT]
+        )
+
+
+def test_the_champ_spelling_is_accepted_in_any_case(connections):
+    """`ROWSPC`, `rowspc` or `RowSpc`: the resolver normalises."""
+    master, dictionary = connections
+
+    for spelling in ("ROWSPC", "rowspc", "RowSpc"):
+        resolver = resolver_with(master, dictionary, {
+            ("dssat_x_planting_detail", spelling, 1): "80",
+        })
+        overrides = dssatxconverter.crop_season_overrides(
+            resolver, MANAGEMENT, 1, 1
+        )["dssat_x_planting_detail"]
+        assert planting_line(master, dictionary, overrides).split()[7] == "80.0"

@@ -141,6 +141,14 @@ build:
 | an extension of `InitialConditions` | `idIni` | one set of initial conditions |
 | `OperationParameterOverrides`, agreed and to build | `idOperation, Model, TargetTable, Parameter` | one irrigation, fertiliser, residue or tillage operation |
 
+**An override names the `ModelsDictionary` `Champ`, never the name the
+model's own file uses.** The row spacing is `ROWSPC` and the file writes it
+as `PLRS`; the sowing depth is `SDEPHT`, written `PLDP`. That translation
+belongs to the writer, which reads the Champ through
+`dictionary_or_override` and formats it under the file's column name. A row
+naming the file's spelling is refused at prefetch, with a message listing
+the Champ names of that table.
+
 The rule: **store a value only when it differs from the `ModelsDictionary`
 default**, so the tables hold the delta between an experiment and the
 model's own defaults. That keeps `MasterInput` model-neutral and an import

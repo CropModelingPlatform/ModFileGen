@@ -146,7 +146,9 @@ class ParameterResolver:
                 table_key = self._normalize(target_table)
                 soil_key = self._normalize(id_soil)
                 parameter_key = self._normalize(parameter)
-                definition = self._definitions[(model, table_key)][parameter_key]
+                definition = self._definition_of(
+                    model, table_key, parameter_key, target_table, parameter
+                )
                 value = self._convert_value(raw_value, definition)
                 key = (model, table_key, soil_key)
                 num_layer = int(num_layer or 0)
@@ -156,6 +158,35 @@ class ParameterResolver:
                     self._layer_overrides.setdefault(key, {}).setdefault(
                         num_layer, {}
                     )[parameter_key] = value
+
+    def _definition_of(
+        self, model, table_key, parameter_key, target_table, parameter
+    ):
+        """The dictionary definition an override row refers to.
+
+        An override names a ``ModelsDictionary`` ``Champ``, not the name the
+        model's own file gives the value: the row spacing is ``ROWSPC`` and
+        the file writes it as ``PLRS``, and the converter does that
+        translation. So a row naming the file's spelling has no definition,
+        and refusing it is right -- a bare ``KeyError: 'plrs'`` simply does
+        not say which row, which table, or what to write instead.
+        """
+        try:
+            return self._definitions[(model, table_key)][parameter_key]
+        except KeyError:
+            known = sorted(self._definitions.get((model, table_key), {}))
+            if not known:
+                raise KeyError(
+                    f"no {model!r} parameter is defined for table "
+                    f"{target_table!r} in the ModelsDictionary, so an "
+                    f"override of {parameter!r} cannot be resolved"
+                ) from None
+            raise KeyError(
+                f"{parameter!r} is not a {model!r} parameter of "
+                f"{target_table!r} in the ModelsDictionary. An override "
+                f"names the dictionary Champ, not the name the model file "
+                f"uses. Known: {', '.join(known)}"
+            ) from None
 
     def prefetch(self, model: str, target_tables: Iterable[str], soil_ids: Iterable[str]):
         model_key = self._normalize(model)
@@ -313,7 +344,9 @@ class ParameterResolver:
             ) in rows:
                 table_key = self._normalize(target_table)
                 parameter_key = self._normalize(parameter)
-                definition = self._definitions[(model, table_key)][parameter_key]
+                definition = self._definition_of(
+                    model, table_key, parameter_key, target_table, parameter
+                )
                 key = (
                     model, table_key, self._normalize(management_id),
                     int(season_order), int(plant_order),
@@ -415,7 +448,9 @@ class ParameterResolver:
             for point_id, target_table, parameter, raw_value in rows:
                 table_key = self._normalize(target_table)
                 parameter_key = self._normalize(parameter)
-                definition = self._definitions[(model, table_key)][parameter_key]
+                definition = self._definition_of(
+                    model, table_key, parameter_key, target_table, parameter
+                )
                 key = (model, table_key, self._normalize(point_id))
                 self._point_overrides.setdefault(key, {})[
                     parameter_key
