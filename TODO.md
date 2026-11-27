@@ -32,16 +32,45 @@ and linked to an issue or pull request when one exists.
   nitrogen, the previous crop, the root growth factor, the wind measurement
   height, harvest at maturity, and soil analysis when it has values.
 
-  So the order of work is: grow the schema for that list, then write the
-  import, then compare. Starting with the import would produce a long list
-  of accepted differences, and that list is where this kind of project
-  dies. Two structural findings are in the document: a DSSAT treatment is a
-  vector of pointers and its factorial design is flattened into one
-  `SimUnitList` row per treatment -- acceptable, and the reason to compare
-  outputs rather than input files -- and `*SIMULATION CONTROLS` lives almost
-  entirely outside `MasterInput`, so importing it means writing
-  `CropManagementParameterOverrides` rows, which works but needs the other
-  `dssat_x_simulation_*` tables added to `OVERRIDABLE_TABLES`.
+  Those fields need no new columns: they are routed to the override tables,
+  which exist for exactly this. `SoilParameterOverrides` keyed by
+  `(IdSoil, Model, TargetTable, Parameter, NumLayer)` takes the soil's
+  whole-profile and per-layer values, including the soil analysis that
+  therefore stops being a gap; `CropManagementParameterOverrides` keyed by
+  `(idMangt, SeasonOrder, PlantOrder, ...)` takes the planting details and
+  the simulation controls; `PointParameterOverrides` keyed by `idPoint`
+  takes the weather header, so `WNDHT` -- which is STICS's `zr`, the value
+  we raised by hand in the fixture -- would come from the data. The initial
+  conditions need an extension of their own table, keyed by `idIni`. The
+  rule is to store a value only when it differs from the `ModelsDictionary`
+  default, so the tables hold the delta between an experiment and the
+  model's defaults, which keeps `MasterInput` model-neutral.
+
+  So the order of work is: wire the export to the override tables first,
+  then extend `InitialConditions` and the operation tables, then write the
+  import, then compare output variables. An import writing overrides the
+  export ignores would compare as a difference, and the difference would be
+  ours.
+
+  Two structural findings are in the document. A DSSAT treatment is a vector
+  of pointers and its factorial design flattens into one `SimUnitList` row
+  per treatment -- acceptable, and the reason to compare outputs rather than
+  input files. And the override mechanism reaches everything except a
+  **per-operation** value: no key names an operation, so `IROP` per
+  irrigation and `FMCD`, `FACD`, `FDEP` per fertiliser application need a
+  column on `IrrigationFOperations` and `InorganicFOperations`, which are
+  per-operation by nature, with a lookup for the codes as `ListResidues`
+  already does for residues.
+- [ ] Wire the export to the override tables it does not yet honour.
+  `OVERRIDABLE_TABLES` in `dssatxconverter.py` lists only
+  `dssat_x_simulation_method`; every other writer reads
+  `DT[DT["Champ"] == name]["dv"].values[0]` straight from the dictionary, so
+  an override it does not know about has no effect. Each one is a
+  `TargetTable` added to the set plus a `prefetch_management`, `prefetch` or
+  `prefetch_point` call in the parent process -- a worker sees only the
+  defaults. Start with what `BRPI0202` needs: planting details, the
+  remaining simulation-control tables, the soil site and layer tables, the
+  weather site.
 - [ ] Add a `GeneralInformation` table for `*GENERAL`: people, address,
   site, notes with the publications, and the plot geometry of the `PAREA`
   line. None of it enters the simulation and all of it is what makes a

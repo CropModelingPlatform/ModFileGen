@@ -335,34 +335,106 @@ and `WNDHT` have none — and `WNDHT` is the measurement height that STICS
 calls `zr`, the parameter whose value we had to raise by hand for the
 fixture. An import would supply it from the data instead of a default.
 
-## What this says
+## Where the missing fields go: the override tables
 
-`MasterInput` holds the **structure** of a DSSAT experiment: its
-simulations, managements, operations, soil, weather, cultivars. What it
-does not hold is a second layer of detail that is not decoration:
+`MasterInput` does not need a column per model parameter, and it should not
+get one. It already carries three generic override tables, and a fourth
+place is needed for the initial conditions:
 
-| missing, and it changes results | section |
-|---|---|
-| row spacing `PLRS`, sowing depth `PLDP` | planting |
-| fertiliser material `FMCD` and depth `FDEP` | fertilisers |
-| irrigation method per application `IROP` | irrigation |
-| initial residue mass `ICRES` and its nitrogen `ICREN` | initial conditions |
-| previous crop `PCR` | initial conditions |
-| root growth factor `SRGF`, drainage `SLDR` | soil |
-| wind measurement height `WNDHT` | weather |
-| harvest at maturity `HARVS M` | simulation controls |
-| soil analysis, when it has values | soil analysis |
+| table | key | what it qualifies |
+|---|---|---|
+| `SoilParameterOverrides` | `IdSoil, Model, TargetTable, Parameter, NumLayer` | a soil, whole profile (`NumLayer = 0`) or one layer (`1..n`) |
+| `CropManagementParameterOverrides` | `idMangt, SeasonOrder, PlantOrder, Model, TargetTable, Parameter` | one crop-season of one management |
+| `PointParameterOverrides` | `idPoint, Model, TargetTable, Parameter` | a point, so a weather station |
+| an extension of `InitialConditions` | `idIni` | one set of initial conditions |
 
-None of these is exotic. They are what a field experiment records, and a
-round trip that silently defaults them will differ from the original run and
-the difference will look like a defect in the converter.
+**The rule that makes this work: store a value only when it differs from the
+`ModelsDictionary` default.** The override tables then hold the *delta*
+between this experiment and the model's own defaults — which keeps an import
+small, makes it reviewable as a diff, and keeps `MasterInput` model-neutral.
+A parameter absent from the overrides means "whatever the model usually
+does", which is what a dictionary default already means.
 
-So the honest order of work is: **grow the schema for that list first**,
-then write the import, then compare. Starting with the import would produce
-a long list of accepted differences, and that list is where this kind of
-project goes to die.
+So the gap list from the sections above is not a schema problem. It is a
+routing problem:
 
-`BRPI0202` is still the right first experiment, because its soil analysis is
-empty and its residues are zero — two of the gaps do not bite. Its three-layer
+| field | DSSAT section | goes to | `TargetTable` | key |
+|---|---|---|---|---|
+| `PLRS`, `PLDP`, `PLME`, `PLDS`, `PPOE`, `EDATE` | planting | `CropManagementParameterOverrides` | `dssat_x_planting_details` | crop-season |
+| `HARVS`, and all of `OPTIONS`, `METHODS`, `MANAGEMENT`, `OUTPUTS`, `AUTOMATIC MANAGEMENT` | simulation controls | `CropManagementParameterOverrides` | `dssat_x_simulation_*` | crop-season |
+| `SRGF`, `SLMH` | soil, per layer | `SoilParameterOverrides` | the layer table | `NumLayer = 1..n` |
+| `SLDR`, `SLU1`, `SLNF`, `SLPF`, `SCOM` | soil, whole profile | `SoilParameterOverrides` | the site table | `NumLayer = 0` |
+| `SADM`, `SAOC`, `SANI`, `SAPHW`, `SAPX`, `SAKE` | soil analysis | `SoilParameterOverrides` | `dssat_x_soil_analysis_data` | `NumLayer = 1..n` |
+| `WNDHT`, `REFHT` | weather header | `PointParameterOverrides` | `dssat_weather_site` | point |
+| `PCR`, `ICDAT`, `ICRES`, `ICREN`, `ICRIP`, `ICRID` | initial conditions | extension of `InitialConditions` | — | `idIni` |
+
+Two of these deserve a note.
+
+**`*SOIL ANALYSIS` stops being a gap.** Its values are per layer, which is
+exactly what `SoilParameterOverrides.NumLayer` is for: `0` for the whole
+profile, `1..n` for a layer. An experiment carrying real analysis values
+becomes importable without a new table.
+
+**`WNDHT` is STICS's `zr`.** It is the weather measurement height, the
+parameter whose value had to be raised by hand in the fixture because the
+dictionary default of 2.0 m was below the maize canopy. Imported from the
+weather file into `PointParameterOverrides`, it would come from the data
+instead of a default — and both models would read the same number, which is
+the point of the database.
+
+### The one place the mechanism does not reach
+
+An override is one value per parameter per key, and no key names an
+**operation**. So these cannot be carried:
+
+- `IROP`, the irrigation method of each of the thirty applications;
+- `FMCD`, `FACD`, `FDEP` — material, method and depth of each of the five
+  fertiliser applications. `FE027` (urea) and `FE005` (ammonium nitrate)
+  behave differently, so this is not decoration.
+
+Two ways out. Add the columns to the operation tables, which are ours and
+per-operation by nature — `IrrigationFOperations` and `InorganicFOperations`
+already hold one row per application, so a method column belongs there, with
+a lookup table for the codes as `ListResidues` already does for residues.
+Or extend the override key with an operation number. The first is simpler
+and keeps the override tables for what they are, so that is the one to take
+unless something argues otherwise.
+
+### What this asks of the export
+
+The import is the easy half. For an override to have any effect, **the
+writer that emits the value must read it through the resolver** instead of
+taking the dictionary default. Today exactly one does:
+`dssat_x_simulation_method`, through `OVERRIDABLE_TABLES` in
+`dssatxconverter.py`, which the `MEPHO` work added.
+
+Every other writer takes `DT[DT["Champ"] == name]["dv"].values[0]` directly.
+Routing them through `ParameterResolver` is the bulk of the work, and it is
+uniform: the resolver already offers `resolve()` and `resolve_layers()` for
+a soil, `resolve_management()` for a crop-season and `resolve_point()` for a
+point, and the prefetch must happen in the parent process because a worker
+sees only the defaults.
+
+That is also what makes the round trip meaningful. An import that writes
+overrides the export ignores would compare as a difference, and the
+difference would be ours.
+
+## The order of work
+
+1. **Wire the export to the overrides**, table by table, starting with the
+   ones `BRPI0202` needs: planting details, the simulation controls that are
+   not yet covered, the soil site and layer tables, and the weather site.
+   Each is a `TargetTable` added to the overridable set plus a prefetch in
+   the parent.
+2. **Extend `InitialConditions`** for the previous crop, the measurement
+   date and the initial residues.
+3. **Add the per-operation columns** to the irrigation and fertiliser
+   operation tables.
+4. **Write the import** for one experiment, storing only what differs from
+   the dictionary defaults.
+5. **Compare the two runs' output variables**, not their input files.
+
+`BRPI0202` stays the right first experiment: its soil analysis is empty and
+its residues are zero, so two gaps do not bite, while its three-layer
 detailed soil and its thirty irrigations are exactly the paths with no
 coverage today.

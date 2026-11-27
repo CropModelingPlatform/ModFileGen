@@ -113,13 +113,34 @@ endings and raise on non-UTF-8 input. Both engines were run on LF copies and
 gave identical results, so the CRLF these files carry is a convention, not a
 requirement.
 
-**Per-crop-season parameter overrides go in `CropManagementParameterOverrides`**,
-keyed by `(idMangt, SeasonOrder, PlantOrder)`. No new table was needed. The
-fixture carries one row per model as a worked example, including
-`dssat.dssat_x_simulation_method.MEPHO = L` on the peanut season. Only
-`dssat_x_simulation_method` is wired (`OVERRIDABLE_TABLES` in
-`dssatxconverter.py`); adding a table is one line plus a `prefetch_management`
-call in the parent process.
+**Parameter overrides are the mechanism for anything the schema does not
+have a column for, and there are three of them**, plus a fourth place to
+build:
+
+| table | key | qualifies |
+|---|---|---|
+| `SoilParameterOverrides` | `IdSoil, Model, TargetTable, Parameter, NumLayer` | a soil, whole profile (`NumLayer = 0`) or one layer (`1..n`) |
+| `CropManagementParameterOverrides` | `idMangt, SeasonOrder, PlantOrder, Model, TargetTable, Parameter` | one crop-season |
+| `PointParameterOverrides` | `idPoint, Model, TargetTable, Parameter` | a point, so a weather station |
+| an extension of `InitialConditions` | `idIni` | one set of initial conditions |
+
+The rule: **store a value only when it differs from the `ModelsDictionary`
+default**, so the tables hold the delta between an experiment and the
+model's own defaults. That keeps `MasterInput` model-neutral and an import
+reviewable as a diff. Do not add a column per model parameter; route it to
+the right override table instead.
+
+The fixture carries one row per model as a worked example, including
+`dssat.dssat_x_simulation_method.MEPHO = L` on the peanut season.
+
+**But the export only honours one table so far.** `OVERRIDABLE_TABLES` in
+`dssatxconverter.py` lists `dssat_x_simulation_method` and nothing else;
+every other writer takes `DT[DT["Champ"] == name]["dv"].values[0]` straight
+from the dictionary, so an override it does not know about has no effect.
+Adding one is a `TargetTable` in that set plus a `prefetch_management`,
+`prefetch` or `prefetch_point` call **in the parent process** — a worker
+sees only the defaults. `docs/dssat_import_mapping.md` says which tables an
+import of a real experiment needs, and in what order.
 
 **`NYERS` cannot bound a DSSAT sequence at a season count.** `CSM.for` uses
 it once, at the first run, for `YRDOY_END = (year + NYERS) * 1000 + day - 1`,
@@ -199,11 +220,21 @@ the self-test digests with `modfilegen.selftest.write_reference()`.
 `TODO.md` has 49 open items. The ones that matter, in the order I would take
 them:
 
+0. **The import level**, which is the direction the work has turned towards:
+   take a real model experiment, build a `MasterInput` from it, export, run,
+   and compare the two runs' output variables. It is the only test that
+   would have caught every DSSAT defect found on this branch, and the corpus
+   is validated by the model authors — `dssat-csm-data` ships hundreds of
+   experiments, JavaSTICS 175 workspaces. `docs/dssat_import_mapping.md`
+   maps one real experiment field by field and sets the order of work: wire
+   the export to the override tables first, because an import that writes
+   overrides the export ignores would compare as a difference, and the
+   difference would be ours.
 1. **A generation-only mode.** The converters write a simulation's files and
    start the engine in the same loop, so there is no way to generate without
-   an engine. Everything else waits on this: `agriscale selftest` cannot
-   check generated files, and CI cannot run on a machine with no model. This
-   is also where the weather cache pays, since no engine time hides it.
+   an engine. `agriscale selftest` cannot check generated files, and CI
+   cannot run on a machine with no model. This is also where the weather
+   cache pays, since no engine time hides it.
 2. **CI matrix `windows-latest` / `macos-latest`.** macOS has never been
    tested by anyone. Blocked on two known things: `test_celsiusconverter`
    mutates `tests/data/CelsiusV3nov17_dataArise.db`, and that same test
