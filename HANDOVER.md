@@ -22,13 +22,14 @@ Two constraints the user set explicitly and that still hold:
 
 - **Do not lose computational performance.** The parallel path is the
   product. Measure before and after anything that touches it.
-- **Do not commit the user's adapted tests** — 18 modified files are
-  deliberately left out (`tests/conftest.py`, `tests/apsim/*`,
-  `tests/test_sticsconverter*`, `tests/test_tempopar*`, the notebooks, two
-  `tests/data/*.db`). They are "lot A". Ask before committing any of them. A
-  fresh clone therefore has the 574 tests written on this branch but not
-  those adaptations. `docs/stics/` is also untracked and is a separate
-  question, already in `TODO.md`: 572 KB of generated HTML reference.
+- **Do not commit the user's adapted tests.** `git status` shows them
+  modified and they are to stay that way: `tests/conftest.py`,
+  `tests/apsim/*`, `tests/test_sticsconverter*`, `tests/test_tempopar*`, the
+  notebooks, and two databases under `tests/data`. They are "lot A". Ask
+  before committing any of them. A fresh clone therefore has the 574 tests
+  written on this branch but not those adaptations, so some APSIM and legacy
+  STICS tests may fail for someone else. `docs/stics/` is untracked for a
+  separate reason, already in `TODO.md`: 572 KB of generated HTML.
 
 ## How to work here
 
