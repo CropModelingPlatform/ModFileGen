@@ -624,7 +624,10 @@ def writeBlockInitialConditionData(
     
 
 
-def writeBlockPlantingDetail(dssat_tableName, idSim, modelDictionary_Connection, master_input_connection):
+def writeBlockPlantingDetail(
+    dssat_tableName, idSim, modelDictionary_Connection,
+    master_input_connection, overrides=None,
+):
     fileContent = ""
     dssat_queryRead = "Select Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'dssat') And ([Table] = '%s'));"%(dssat_tableName)
     DT = pd.read_sql_query(dssat_queryRead, modelDictionary_Connection)
@@ -634,8 +637,7 @@ def writeBlockPlantingDetail(dssat_tableName, idSim, modelDictionary_Connection,
     fileContent += "\n"
     fileContent += "*PLANTING DETAILS\n"
     fileContent += siteColumnsHeader + "\n"
-    rw = DT[DT["Champ"] == "LNPLT"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "LNPLT")
     fileContent += v_fmt_plant["P"].format(float(Dv))
     if dataTable["StartYear"].values[0] % 4 == 0:
         Bissext = 1
@@ -646,43 +648,32 @@ def writeBlockPlantingDetail(dssat_tableName, idSim, modelDictionary_Connection,
         fileContent += v_fmt_plant["PDATE"].format(str(dataTable["StartYear"].values[0] + 1)[2:4] + str(dataTable["sowingdate"].values[0] - 365 - Bissext).rjust(3, "0"))
     else:
         fileContent += v_fmt_plant["PDATE"].format(str(dataTable["StartYear"].values[0])[2:4] + str(dataTable["sowingdate"].values[0]).rjust(3, "0"))
-    rw = DT[DT["Champ"] == "IEMRG"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IEMRG")
     fileContent += v_fmt_plant["EDATE"].format(Dv)
     fileContent += v_fmt_plant["PPOP"].format(dataTable["sdens"].values[0])
     fileContent += v_fmt_plant["PPOE"].format(dataTable["sdens"].values[0])
-    rw = DT[DT["Champ"] == "PLME"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "PLME")
     fileContent += v_fmt_plant["PLME"].format(Dv)
     rw = DT[DT["Champ"] == "PLDS"]  
     Dv = rw["dv"].values[0]
     fileContent += v_fmt_plant["PLDS"].format(Dv)
-    rw = DT[DT["Champ"] == "ROWSPC"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "ROWSPC")
     fileContent += v_fmt_plant["PLRS"].format(float(Dv))
-    rw = DT[DT["Champ"] == "AZIR"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "AZIR")
     fileContent += v_fmt_plant["PLRD"].format(float(Dv))
-    rw = DT[DT["Champ"] == "SDEPHT"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "SDEPHT")
     fileContent += v_fmt_plant["PLDP"].format(float(Dv))
-    rw = DT[DT["Champ"] == "SDWTPL"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "SDWTPL")
     fileContent += v_fmt_plant["PLWT"].format(float(Dv))
-    rw = DT[DT["Champ"] == "SDAGE"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "SDAGE")
     fileContent += v_fmt_plant["PAGE"].format(float(Dv))
-    rw = DT[DT["Champ"] == "ATEMP"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "ATEMP")
     fileContent += v_fmt_plant["PENV"].format(float(Dv))
-    rw = DT[DT["Champ"] == "PLPH"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "PLPH")
     fileContent += v_fmt_plant["PLPH"].format(float(Dv))
-    rw = DT[DT["Champ"] == "SPRLAP"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "SPRLAP")
     fileContent += v_fmt_plant["SPRL"].format(float(Dv))
-    rw = DT[DT["Champ"] == "PLNAME"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "PLNAME")
     fileContent += v_fmt_plant["PLNAME"].format(Dv) + "\n"
     return fileContent
 
@@ -1269,24 +1260,31 @@ def writeBlockOption(
 
 
 
-#: Tables whose values a user may override per crop-season. These are the
-#: SIMULATION CONTROLS sub-blocks, each a `TargetTable` a
-#: CropManagementParameterOverrides row can name. `_management` is what
-#: carries HARVS, so a season can ask to be harvested at maturity.
+#: Tables whose values a user may override per crop-season, each a
+#: `TargetTable` a `CropManagementParameterOverrides` row can name. The
+#: five SIMULATION CONTROLS sub-blocks -- `_management` is the one carrying
+#: HARVS, so a season can ask to be harvested at maturity -- and the
+#: planting details, which belong to the crop-season as much as its sowing
+#: date does.
+#:
+#: Note that an override names the ModelsDictionary `Champ`, not the DSSAT
+#: column: the row spacing is `ROWSPC` and the sowing depth `SDEPHT`, which
+#: the file writes as `PLRS` and `PLDP`.
 OVERRIDABLE_TABLES = (
     "dssat_x_simulation_general",
     "dssat_x_simulation_option",
     "dssat_x_simulation_method",
     "dssat_x_simulation_management",
     "dssat_x_simulation_outputs",
+    "dssat_x_planting_detail",
 )
 
 
-def simulation_overrides(parameter_resolver, idMangt, season_order, plant_order):
-    """Per-crop-season overrides of the simulation controls, by table.
+def crop_season_overrides(parameter_resolver, idMangt, season_order, plant_order):
+    """Per-crop-season overrides, by target table.
 
-    Returns ``{table: {parameter: value}}`` for every overridable
-    SIMULATION CONTROLS sub-block, so each writer asks for its own. A table
+    Returns ``{table: {parameter: value}}`` for every table of
+    :data:`OVERRIDABLE_TABLES`, so each writer asks for its own. A table
     that was not prefetched is absent, which leaves its writer on the
     dictionary defaults -- the behaviour every caller had before.
 
@@ -1304,6 +1302,10 @@ def simulation_overrides(parameter_resolver, idMangt, season_order, plant_order)
         except RuntimeError:
             continue
     return resolved
+
+
+#: The former name, kept so a caller outside this module is not broken.
+simulation_overrides = crop_season_overrides
 
 
 def dictionary_or_override(DT, overrides, champ):
@@ -1661,6 +1663,10 @@ class DssatXConverter(Converter):
         ST = path_parts(directory_path)
         idSim = ST[-2]
         idMangt = ST[-1]
+        # Resolved once for this crop-season; each writer takes its table.
+        season_overrides = crop_season_overrides(
+            parameter_resolver, idMangt, season_order, plant_order
+        )
         T = "Select Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],[Default_Value_Datamill]) As dv From Variables Where ((model = 'dssat') And ([Table] like 'dssat_x_%'));"
         DT = pd.read_sql_query(T, modelDictionary_Connection)
         
@@ -1774,7 +1780,11 @@ class DssatXConverter(Converter):
         # Planting details
         dssat_tableName = "dssat_x_planting_detail"
         dssat_tableId = "dssat_x_exp_id"
-        fileContent += writeBlockPlantingDetail(dssat_tableName, idSim, modelDictionary_Connection, master_input_connection)
+        fileContent += writeBlockPlantingDetail(
+            dssat_tableName, idSim, modelDictionary_Connection,
+            master_input_connection,
+            season_overrides.get("dssat_x_planting_detail"),
+        )
         
         # Irrigation and water management
         dssat_tableName = "dssat_x_irrigation_water"
@@ -1823,9 +1833,7 @@ class DssatXConverter(Converter):
         fileContent += writeBlockEndFile(
             idSim, modelDictionary_Connection, master_input_connection,
             dailyoutput,
-            simulation_overrides(
-                parameter_resolver, idMangt, season_order, plant_order
-            ),
+            season_overrides,
         )
         
         try:

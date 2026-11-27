@@ -55,15 +55,21 @@ def resolver_with(master, dictionary, rows):
 # --- the five tables ------------------------------------------------------
 
 
-def test_all_five_control_blocks_are_overridable():
+def test_every_control_block_is_overridable():
     """Not the methods alone: GENERAL, OPTIONS, MANAGEMENT and OUTPUTS too."""
-    assert set(dssatxconverter.OVERRIDABLE_TABLES) == {
+    assert {
         "dssat_x_simulation_general",
         "dssat_x_simulation_option",
         "dssat_x_simulation_method",
         "dssat_x_simulation_management",
         "dssat_x_simulation_outputs",
-    }
+    } <= set(dssatxconverter.OVERRIDABLE_TABLES)
+
+
+def test_the_planting_details_are_overridable_too():
+    """They belong to the crop-season as much as its sowing date does, and
+    they carry the row spacing and the sowing depth."""
+    assert "dssat_x_planting_detail" in dssatxconverter.OVERRIDABLE_TABLES
 
 
 def test_each_table_is_resolved_separately(connections):
@@ -154,3 +160,80 @@ def test_the_irrigation_and_fertiliser_switches_are_reachable(connections):
     fields = management_line(dictionary, overrides).split()
     assert fields[3] == "A"  # IRRIG
     assert fields[4] == "A"  # FERTI
+
+
+# --- the planting details -------------------------------------------------
+
+
+def planting_line(master, dictionary, overrides):
+    block = dssatxconverter.writeBlockPlantingDetail(
+        "dssat_x_planting_detail", "5.925_6.025_2001_FERT_MIN_ORG_2",
+        dictionary, master, overrides,
+    )
+    return next(
+        line for line in block.splitlines()
+        if line.strip() and not line.startswith(("*", "@"))
+    )
+
+
+def test_the_row_spacing_and_depth_come_from_the_dictionary_by_default(
+    connections
+):
+    master, dictionary = connections
+
+    fields = planting_line(master, dictionary, None).split()
+
+    # 0:level 1:PDATE 2:EDATE 3:PPOP 4:PPOE 5:PLME 6:PLDS 7:PLRS 8:PLRD 9:PLDP
+    assert fields[7] == "75.0"   # PLRS, the row spacing
+    assert fields[9] == "3.0"    # PLDP, the sowing depth
+
+
+def test_an_override_sets_the_row_spacing(connections):
+    """`PLRS` is the dictionary's `ROWSPC`: an override names the Champ, not
+    the DSSAT column. 80 cm is what BRPI0202 records."""
+    master, dictionary = connections
+    resolver = resolver_with(master, dictionary, {
+        ("dssat_x_planting_detail", "ROWSPC", 1): "80",
+    })
+    overrides = dssatxconverter.crop_season_overrides(
+        resolver, MANAGEMENT, 1, 1
+    )["dssat_x_planting_detail"]
+
+    assert planting_line(master, dictionary, overrides).split()[7] == "80.0"
+
+
+def test_an_override_sets_the_sowing_depth(connections):
+    """`PLDP` is the dictionary's `SDEPHT`. BRPI0202 sows at 5 cm."""
+    master, dictionary = connections
+    resolver = resolver_with(master, dictionary, {
+        ("dssat_x_planting_detail", "SDEPHT", 1): "5",
+    })
+    overrides = dssatxconverter.crop_season_overrides(
+        resolver, MANAGEMENT, 1, 1
+    )["dssat_x_planting_detail"]
+
+    assert planting_line(master, dictionary, overrides).split()[9] == "5.0"
+
+
+def test_the_sowing_date_still_comes_from_the_database(connections):
+    """PDATE and PPOP are data, read from CropManagement, and an override of
+    another field must not disturb them."""
+    master, dictionary = connections
+    resolver = resolver_with(master, dictionary, {
+        ("dssat_x_planting_detail", "ROWSPC", 1): "80",
+    })
+    overrides = dssatxconverter.crop_season_overrides(
+        resolver, MANAGEMENT, 1, 1
+    )["dssat_x_planting_detail"]
+
+    plain = planting_line(master, dictionary, None).split()
+    overridden = planting_line(master, dictionary, overrides).split()
+
+    assert overridden[1] == plain[1]   # PDATE
+    assert overridden[3] == plain[3]   # PPOP
+
+
+def test_the_old_name_of_the_accessor_still_works():
+    """`simulation_overrides` is kept, since the mapping now covers more
+    than the simulation controls."""
+    assert dssatxconverter.simulation_overrides is dssatxconverter.crop_season_overrides

@@ -95,6 +95,20 @@ and linked to an issue or pull request when one exists.
   while seasons 1 and 3 are untouched. The `IIRRI` and `IFERI` switches,
   whose `TODO` comments asked whether they should come from the database,
   are reachable the same way.
+- [x] `dssat_x_planting_detail` is overridable per crop-season, so the row
+  spacing and the sowing depth come from the database when an import
+  supplies them. The dictionary `Champ` names are `ROWSPC` and `SDEPHT`,
+  which the file writes as `PLRS` and `PLDP` -- an override names the
+  Champ. `PDATE` and `PPOP` stay data, read from `CropManagement`, and a
+  test holds them steady while another field is overridden.
+
+  Note the dictionary table is `dssat_x_planting_detail`, singular. The
+  mapping document had it plural and the resolver raised a `KeyError` on
+  the first run, which is how it was caught.
+
+  `PPOE` is not reachable: the writer takes it from `sdens` like `PPOP`, so
+  an experiment whose emerged population differs from the sown one -- 5
+  against 7 in `BRPI0202` -- needs a column rather than an override.
 - [ ] Wire the export to the remaining override tables it does not honour.
   `OVERRIDABLE_TABLES` in `dssatxconverter.py` lists only
   `dssat_x_simulation_method`; every other writer reads

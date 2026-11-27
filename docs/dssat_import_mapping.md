@@ -219,7 +219,14 @@ seed), `PLDS` (row or broadcast), `PLRS` **80 cm row spacing** — the
 (row direction), `PLDP` (5 cm sowing depth), `PPOE` (the population that
 actually emerged, 5 against 7 sown).
 
-`PLRS` and `PLDP` are the two that change results.
+`PLRS` and `PLDP` are the two that change results, and both are now
+overridable through `CropManagementParameterOverrides` with
+`TargetTable = dssat_x_planting_detail`. **An override names the
+ModelsDictionary `Champ`, not the DSSAT column**: the row spacing is
+`ROWSPC` and the sowing depth `SDEPHT`, which the file writes as `PLRS` and
+`PLDP`. `PPOE` is not overridable, because the writer takes it from `sdens`
+like `PPOP`; an experiment where the emerged population differs from the
+sown one -- 5 against 7 here -- needs a column, not an override.
 
 ## `*IRRIGATION` — partial, and a conversion
 
@@ -361,7 +368,7 @@ routing problem:
 
 | field | DSSAT section | goes to | `TargetTable` | key |
 |---|---|---|---|---|
-| `PLRS`, `PLDP`, `PLME`, `PLDS`, `PPOE`, `EDATE` | planting | `CropManagementParameterOverrides` | `dssat_x_planting_details` | crop-season |
+| `PLRS`, `PLDP`, `PLME`, `PLDS`, `EDATE` | planting | `CropManagementParameterOverrides` | `dssat_x_planting_detail` | crop-season |
 | `HARVS`, and all of `OPTIONS`, `METHODS`, `MANAGEMENT`, `OUTPUTS`, `AUTOMATIC MANAGEMENT` | simulation controls | `CropManagementParameterOverrides` | `dssat_x_simulation_*` | crop-season |
 | `SRGF`, `SLMH` | soil, per layer | `SoilParameterOverrides` | the layer table | `NumLayer = 1..n` |
 | `SLDR`, `SLU1`, `SLNF`, `SLPF`, `SCOM` | soil, whole profile | `SoilParameterOverrides` | the site table | `NumLayer = 0` |
