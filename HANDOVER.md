@@ -123,12 +123,18 @@ build:
 | `CropManagementParameterOverrides` | `idMangt, SeasonOrder, PlantOrder, Model, TargetTable, Parameter` | one crop-season |
 | `PointParameterOverrides` | `idPoint, Model, TargetTable, Parameter` | a point, so a weather station |
 | an extension of `InitialConditions` | `idIni` | one set of initial conditions |
+| `OperationParameterOverrides`, to build | `idOperation, Model, TargetTable, Parameter` | one irrigation, fertiliser, residue or tillage operation |
 
 The rule: **store a value only when it differs from the `ModelsDictionary`
 default**, so the tables hold the delta between an experiment and the
 model's own defaults. That keeps `MasterInput` model-neutral and an import
 reviewable as a diff. Do not add a column per model parameter; route it to
-the right override table instead.
+the right override table instead -- including a value that belongs to one
+operation, since an operation has an identity (`idIrrigation`, or
+`(IrrigationPolicyCode, IrrigationNumber)`, and the same shape for the
+fertiliser, residue and tillage tables). A DSSAT material code on
+`InorganicFOperations` would put a model-specific value in a model-neutral
+table, which is what these tables exist to avoid.
 
 The fixture carries one row per model as a worked example, including
 `dssat.dssat_x_simulation_method.MEPHO = L` on the peanut season.

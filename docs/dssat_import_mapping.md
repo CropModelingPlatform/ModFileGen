@@ -338,8 +338,8 @@ fixture. An import would supply it from the data instead of a default.
 ## Where the missing fields go: the override tables
 
 `MasterInput` does not need a column per model parameter, and it should not
-get one. It already carries three generic override tables, and a fourth
-place is needed for the initial conditions:
+get one. It already carries three generic override tables; two more places
+are needed, for the initial conditions and for a single operation:
 
 | table | key | what it qualifies |
 |---|---|---|
@@ -347,6 +347,7 @@ place is needed for the initial conditions:
 | `CropManagementParameterOverrides` | `idMangt, SeasonOrder, PlantOrder, Model, TargetTable, Parameter` | one crop-season of one management |
 | `PointParameterOverrides` | `idPoint, Model, TargetTable, Parameter` | a point, so a weather station |
 | an extension of `InitialConditions` | `idIni` | one set of initial conditions |
+| `OperationParameterOverrides` | `idOperation, Model, TargetTable, Parameter` | one irrigation, fertiliser, residue or tillage operation |
 
 **The rule that makes this work: store a value only when it differs from the
 `ModelsDictionary` default.** The override tables then hold the *delta*
@@ -367,6 +368,8 @@ routing problem:
 | `SADM`, `SAOC`, `SANI`, `SAPHW`, `SAPX`, `SAKE` | soil analysis | `SoilParameterOverrides` | `dssat_x_soil_analysis_data` | `NumLayer = 1..n` |
 | `WNDHT`, `REFHT` | weather header | `PointParameterOverrides` | `dssat_weather_site` | point |
 | `PCR`, `ICDAT`, `ICRES`, `ICREN`, `ICRIP`, `ICRID` | initial conditions | extension of `InitialConditions` | — | `idIni` |
+| `IROP` | irrigation, per application | `OperationParameterOverrides` | `dssat_x_irrigation_water_data` | `idIrrigation` |
+| `FMCD`, `FACD`, `FDEP` | fertilisers, per application | `OperationParameterOverrides` | `dssat_x_fertilizer` | `idFertInorg` |
 
 Two of these deserve a note.
 
@@ -382,23 +385,46 @@ weather file into `PointParameterOverrides`, it would come from the data
 instead of a default — and both models would read the same number, which is
 the point of the database.
 
-### The one place the mechanism does not reach
+### Per-operation values: a fifth override table
 
-An override is one value per parameter per key, and no key names an
-**operation**. So these cannot be carried:
+A value belonging to **one operation** -- `IROP`, the method of each of the
+thirty irrigations, or `FMCD`, `FACD` and `FDEP`, the material, method and
+depth of each of the five fertiliser applications -- is reached the same
+way, because an operation has an identity:
 
-- `IROP`, the irrigation method of each of the thirty applications;
-- `FMCD`, `FACD`, `FDEP` — material, method and depth of each of the five
-  fertiliser applications. `FE027` (urea) and `FE005` (ammonium nitrate)
-  behave differently, so this is not decoration.
+| table | own key | natural key |
+|---|---|---|
+| `IrrigationFOperations` | `idIrrigation` | `(IrrigationPolicyCode, IrrigationNumber)` |
+| `InorganicFOperations` | `idFertInorg` | `(InorgFertiPolicyCode, IFNumber)` |
+| `OrganicFOperations` | `idFertOrga` | `(OFertiPolicyCode, OFNumber)` |
+| `SoilTillageOperations` | `IdTillOp` | `(SoilTillPolicyCode, STNumber)` |
 
-Two ways out. Add the columns to the operation tables, which are ours and
-per-operation by nature — `IrrigationFOperations` and `InorganicFOperations`
-already hold one row per application, so a method column belongs there, with
-a lookup table for the codes as `ListResidues` already does for residues.
-Or extend the override key with an operation number. The first is simpler
-and keeps the override tables for what they are, so that is the one to take
-unless something argues otherwise.
+The strategy is named from `CropManagement` -- `IrrigationPolicyCode` and
+its siblings -- and an operation is that strategy plus its number. So a
+fifth table follows the shape of the other four:
+
+```
+OperationParameterOverrides(
+    idOperation TEXT NOT NULL,   -- idIrrigation, idFertInorg, idFertOrga, IdTillOp
+    Model       TEXT NOT NULL,
+    TargetTable TEXT NOT NULL,   -- which also says the family: _irrigation_water_data,
+    Parameter   TEXT NOT NULL,   -- _fertilizer, _residues, _tillage
+    Value       TEXT NOT NULL,
+    PRIMARY KEY (idOperation, Model, TargetTable, Parameter)
+)
+```
+
+`FE027` for the first application and `FE005` for the second is two rows,
+and the thirty `IR004` are thirty rows -- or none, when they equal the
+dictionary default, which is the usual case and why the delta rule keeps
+this small.
+
+**A column on the operation table would be the wrong answer**, and it was
+this document's first recommendation. `FMCD` is a DSSAT material code;
+putting it in `InorganicFOperations` would place a model-specific value in a
+model-neutral table, which is what the override mechanism exists to avoid.
+The operation tables keep what every model needs -- when, how much, of which
+nutrient -- and the override tables keep what one model asks in addition.
 
 ### What this asks of the export
 
@@ -428,8 +454,8 @@ difference would be ours.
    the parent.
 2. **Extend `InitialConditions`** for the previous crop, the measurement
    date and the initial residues.
-3. **Add the per-operation columns** to the irrigation and fertiliser
-   operation tables.
+3. **Add `OperationParameterOverrides`**, keyed by the operation's own
+   identity, for the per-application values.
 4. **Write the import** for one experiment, storing only what differs from
    the dictionary defaults.
 5. **Compare the two runs' output variables**, not their input files.
@@ -438,3 +464,54 @@ difference would be ours.
 its residues are zero, so two gaps do not bite, while its three-layer
 detailed soil and its thirty irrigations are exactly the paths with no
 coverage today.
+
+
+## DSSAT to ICASA variable correspondence
+
+The `comments` column contains `to be converted` when the listed DSSAT and
+ICASA units differ. This comparison is separate from conversion to MasterInput
+units and measurement bases. ICASA dates denote a date type, not a physical unit.
+
+| DSSAT variable | ICASA code | DSSAT unit/type | ICASA unit/type | comments |
+|---|---|---|---|---|
+| ID_FIELD | FIELD_ID | text | text | |
+| ID_SOIL | SOIL_ID | text | text | |
+| PDATE | PDATE | date | date | |
+| PPOP | PLPOP | plants/m² | plants/m² | |
+| PPOE | PLPOE | plants/m² | plants/m² | |
+| PLRS | PLRS | cm | cm | |
+| PLDP | PLDP | cm | mm | to be converted |
+| IDATE | IDATE | date | date | |
+| IROP | IROP | code | code | |
+| IRVAL | IRVAL | mm | mm | |
+| FDATE | FEDATE | date | date | |
+| FMCD | FECD | code | code | |
+| FACD | FEACD | code | code | |
+| FDEP | FEDEP | cm | cm | |
+| FAMN | FEAMN | kg N/ha | kg N/ha | |
+| FAMP | FEAMP | kg P/ha | kg P/ha | |
+| FAMK | FEAMK | kg K/ha | kg K/ha | |
+| RAMT | OMAMT | kg dry matter/ha | kg dry matter/ha | |
+| SLB | SLLB | cm | cm | |
+| SLLL | SLLL | cm³/cm³ | cm³/cm³ | |
+| SDUL | SLDUL | cm³/cm³ | cm³/cm³ | |
+| SSAT | SLSAT | cm³/cm³ | cm³/cm³ | |
+| SSKS | SKSAT | cm/h | cm/h | |
+| SBDM | SLBDM | g/cm³ | g/cm³ | |
+| SLOC | SLOC | % | % | |
+| SLCL | SLCLY | % | % | |
+| SLSI | SLSIL | % | % | |
+| SRGF | SLRGF | unitless | unitless | |
+| SRAD | SRAD | MJ/m²/day | MJ/m²/day | |
+| TMAX | TMAX | °C | °C | |
+| TMIN | TMIN | °C | °C | |
+| RAIN | RAIN | mm/day record | mm/day record | |
+| TAV | TAV | °C | °C | |
+| AMP | TAMP | °C | °C | |
+| WNDHT | WNDHT | m | m | |
+| REFHT | REFHT | m | m | |
+
+Sources: official ICASA dictionary sections
+[Management](https://github.com/DSSAT/ICASA-Dictionary/blob/main/CSV/Management_info.csv),
+[Soils](https://github.com/DSSAT/ICASA-Dictionary/blob/main/CSV/Soils_data.csv), and
+[Weather](https://github.com/DSSAT/ICASA-Dictionary/blob/main/CSV/Weather_data.csv).
