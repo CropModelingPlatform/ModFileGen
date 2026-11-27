@@ -162,10 +162,12 @@ level is wired for STICS v11's station and, since
 `tests/test_dssat_weather_point_override.py`, for DSSAT's weather header --
 so `WNDHT`, `REFHT`, `TAV` and `AMP` are overridable per point there. APSIM's
 weather writer still is not. The crop-season level is wired for STICS v11 `fictec1` and, in
-DSSAT, for `dssat_x_simulation_method` alone, listed in `OVERRIDABLE_TABLES`
-in `dssatxconverter.py`; every other DSSAT writer takes
-`DT[DT["Champ"] == name]["dv"].values[0]` straight from the dictionary, so an
-override it does not know about is inert. The operation level has nothing,
+DSSAT, for all five `SIMULATION CONTROLS` sub-blocks, listed in
+`OVERRIDABLE_TABLES` in `dssatxconverter.py` -- which is what makes
+`HARVS = M`, harvest at maturity, reachable per season. Every other DSSAT
+writer still takes `DT[DT["Champ"] == name]["dv"].values[0]` straight from
+the dictionary, so an override it does not know about is inert; the planting
+details are the next ones an import needs. The operation level has nothing,
 because the table is not built yet.
 
 Adding a level to a writer is a `TargetTable` in the overridable set plus a

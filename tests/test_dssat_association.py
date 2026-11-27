@@ -210,10 +210,13 @@ def test_an_override_reaches_the_crop_season_that_asked_for_it(connection):
         "dssat", dssatxconverter.OVERRIDABLE_TABLES, ["ROT_MAIZE_PEANUT_3Y"]
     )
 
+    # One entry per overridable SIMULATION CONTROLS sub-block, so each
+    # writer asks for its own table and an override of one cannot reach
+    # another.
     seasons = [
         dssatxconverter.simulation_overrides(
             resolver, "ROT_MAIZE_PEANUT_3Y", season, 1
-        )["mepho"]
+        )["dssat_x_simulation_method"]["mepho"]
         for season in (1, 2, 3)
     ]
     dictionary.close()
@@ -222,6 +225,8 @@ def test_an_override_reaches_the_crop_season_that_asked_for_it(connection):
 
 
 def test_without_a_resolver_the_defaults_stand(connection):
+    """No resolver means no override of any table, so every writer stays on
+    the dictionary defaults."""
     from modfilegen.Converter.DssatConverter import dssatxconverter
 
-    assert dssatxconverter.simulation_overrides(None, "any", 1, 1) is None
+    assert dssatxconverter.simulation_overrides(None, "any", 1, 1) == {}

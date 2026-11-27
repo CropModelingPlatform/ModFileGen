@@ -1112,7 +1112,10 @@ def writeBlockHarvest(dssat_tableName, idSim, dssat_tableId, modelDictionary_Con
 
 
 
-def writeBlockEndFile( idSim, modelDictionary_Connection, master_input_connection, dailyoutput, method_overrides=None):
+def writeBlockEndFile(
+    idSim, modelDictionary_Connection, master_input_connection, dailyoutput,
+    control_overrides=None,
+):
     fileContent = ""
     storeKeyDataN = 0
     storeNumMaxSimu = 1
@@ -1132,19 +1135,35 @@ def writeBlockEndFile( idSim, modelDictionary_Connection, master_input_connectio
     while storeNumMaxSimu > storeKeyDataN:
         storeKeyDataN = storeKeyDataN + 1
         dssat_tableId1 = "dssat_x_exp_id"
+        # Each sub-block asks for the overrides of its own table, so a
+        # CropManagementParameterOverrides row naming
+        # dssat_x_simulation_management reaches HARVS and nothing else.
+        overrides = control_overrides or {}
         dssat_tableName1 = "dssat_x_simulation_general"
-        fileContent += writeBlockGeneral(dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection, master_input_connection)
+        fileContent += writeBlockGeneral(
+            dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection,
+            master_input_connection, overrides.get(dssat_tableName1),
+        )
         dssat_tableName1 = "dssat_x_simulation_option"
-        fileContent += writeBlockOption(dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection, master_input_connection)
+        fileContent += writeBlockOption(
+            dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection,
+            master_input_connection, overrides.get(dssat_tableName1),
+        )
         dssat_tableName1 = "dssat_x_simulation_method"
         fileContent += writeBlockMethod(
             dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection,
-            method_overrides,
+            overrides.get(dssat_tableName1),
         )
         dssat_tableName1 = "dssat_x_simulation_management"
-        fileContent += writeBlockManagement(dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection)
+        fileContent += writeBlockManagement(
+            dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection,
+            overrides.get(dssat_tableName1),
+        )
         dssat_tableName1 = "dssat_x_simulation_outputs"
-        fileContent += writeBlockoutputs(dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection, dailyoutput)
+        fileContent += writeBlockoutputs(
+            dssat_tableName1, dssat_tableId1, idSim, modelDictionary_Connection,
+            dailyoutput, overrides.get(dssat_tableName1),
+        )
         fileContent += "\n"
         # Always written, whatever the MANAGEMENT switches say. DSSAT reads
         # the SIMULATION CONTROLS level by level, and with several levels it
@@ -1170,7 +1189,10 @@ def writeBlockEndFile( idSim, modelDictionary_Connection, master_input_connectio
             fileContent += "\n"
     return fileContent
 
-def writeBlockGeneral(dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection, master_input_connection):
+def writeBlockGeneral(
+    dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection,
+    master_input_connection, overrides=None,
+):
     fileContent = ""
     siteColumnsHeader = "@N GENERAL     NYERS NREPS START SDATE RSEED SNAME.................... SMODEL"
     fileContent += siteColumnsHeader + "\n"
@@ -1178,20 +1200,15 @@ def writeBlockGeneral(dssat_tableName, dssat_tableId, idSim, modelDictionary_Con
     dataTable = pd.read_sql_query(fetchAllQuery, master_input_connection)
     dssat_queryRead = "Select Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'dssat') And ([Table] = '%s'));"%(dssat_tableName)
     DT = pd.read_sql_query(dssat_queryRead, modelDictionary_Connection)
-    rw = DT[DT["Champ"] == "LNSIM"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "LNSIM")
     fileContent += v_fmt_simulation["N"].format(float(Dv))
-    rw = DT[DT["Champ"] == "TITCOM"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "TITCOM")
     fileContent += v_fmt_simulation["GENERAL"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "NYRS"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "NYRS")
     fileContent += v_fmt_simulation["NYERS"].format(int(Dv.strip()))
-    rw = DT[DT["Champ"] == "NREPSQ"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "NREPSQ")
     fileContent += v_fmt_simulation["NREPS"].format(int(Dv.strip()))
-    rw = DT[DT["Champ"] == "ISIMI"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "ISIMI")
     fileContent += v_fmt_simulation["START"].format(Dv.strip())
     
     if dataTable["StartYear"].values[0] % 4 == 0:
@@ -1202,11 +1219,9 @@ def writeBlockGeneral(dssat_tableName, dssat_tableId, idSim, modelDictionary_Con
         fileContent += v_fmt_simulation["SDATE"].format(str(dataTable["StartYear"].values[0] + 1)[2:4] + str(dataTable["StartDay"].values[0] - 365 - Bissext).rjust(3, "0"))
     else:
         fileContent += v_fmt_simulation["SDATE"].format(str(dataTable["StartYear"].values[0])[2:4] + str(dataTable["StartDay"].values[0]).rjust(3, "0"))
-    rw = DT[DT["Champ"] == "RSEED"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "RSEED")
     fileContent += v_fmt_simulation["RSEED"].format(int(Dv.strip()))
-    rw = DT[DT["Champ"] == "TITSIM"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "TITSIM")
     fileContent += v_fmt_simulation["SNAME"].format(Dv.strip()) + "\n"
     #rw = DT[DT["Champ"] == "CROP_MODE"]
     #Dv = rw["dv"].values[0]
@@ -1214,7 +1229,10 @@ def writeBlockGeneral(dssat_tableName, dssat_tableId, idSim, modelDictionary_Con
     
     return fileContent
 
-def writeBlockOption(dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection, master_input_connection):
+def writeBlockOption(
+    dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection,
+    master_input_connection, overrides=None,
+):
     fileContent = ""
     siteColumnsHeader = "@N OPTIONS     WATER NITRO SYMBI PHOSP POTAS DISES  CHEM  TILL   CO2"
     fetchAllQuery  = """SELECT SimUnitList.idsim, SimulationOptions.StressW_YN, SimulationOptions.StressN_YN, SimulationOptions.StressP_YN, SimulationOptions.StressK_YN
@@ -1225,62 +1243,67 @@ def writeBlockOption(dssat_tableName, dssat_tableId, idSim, modelDictionary_Conn
     dssat_queryRead = "Select Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'dssat') And ([Table] = '%s'));"%(dssat_tableName)
     DT = pd.read_sql_query(dssat_queryRead, modelDictionary_Connection)
     fileContent += siteColumnsHeader + "\n"
-    rw = DT[DT["Champ"] == "LNSIM"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "LNSIM")
     fileContent += v_fmt_simulation["N"].format(float(Dv))
-    rw = DT[DT["Champ"] == "TITOPT"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "TITOPT")
     fileContent += v_fmt_simulation["OPTIONS"].format(Dv.strip())
     if row["StressW_YN"]: fileContent += v_fmt_simulation["WATER"].format("Y")
     else: fileContent += v_fmt_simulation["WATER"].format("N")
     if row["StressN_YN"]: fileContent += v_fmt_simulation["NITRO"].format("Y")
     else: fileContent += v_fmt_simulation["NITRO"].format("N")
-    rw = DT[DT["Champ"] == "ISWSYM"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "ISWSYM")
     fileContent += v_fmt_simulation["SYMBI"].format(Dv.strip())
     if row["StressP_YN"]: fileContent += v_fmt_simulation["PHOSP"].format("Y")
     else: fileContent += v_fmt_simulation["PHOSP"].format("N")
     if row["StressK_YN"]: fileContent += v_fmt_simulation["POTAS"].format("Y")
     else: fileContent += v_fmt_simulation["POTAS"].format("N")
-    rw = DT[DT["Champ"] == "ISWDIS"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "ISWDIS")
     fileContent += v_fmt_simulation["DISES"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "ISCHEM"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "ISCHEM")
     fileContent += v_fmt_simulation["CHEM"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "ISTILL"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "ISTILL")
     fileContent += v_fmt_simulation["TILL"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "ISCO2"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "ISCO2")
     fileContent += v_fmt_simulation["CO2"].format(Dv.strip()) + "\n"
     return fileContent
 
 
 
-#: Tables whose values a user may override per crop-season. Only the
-#: simulation methods today; the other SIMULATION CONTROLS sub-blocks follow
-#: the same route when they are needed.
-OVERRIDABLE_TABLES = ("dssat_x_simulation_method",)
+#: Tables whose values a user may override per crop-season. These are the
+#: SIMULATION CONTROLS sub-blocks, each a `TargetTable` a
+#: CropManagementParameterOverrides row can name. `_management` is what
+#: carries HARVS, so a season can ask to be harvested at maturity.
+OVERRIDABLE_TABLES = (
+    "dssat_x_simulation_general",
+    "dssat_x_simulation_option",
+    "dssat_x_simulation_method",
+    "dssat_x_simulation_management",
+    "dssat_x_simulation_outputs",
+)
 
 
 def simulation_overrides(parameter_resolver, idMangt, season_order, plant_order):
-    """Per-crop-season overrides for the simulation methods, or None.
+    """Per-crop-season overrides of the simulation controls, by table.
 
-    Resolved in the parent process: a loky worker re-imports the package and
-    would see only the model defaults.
+    Returns ``{table: {parameter: value}}`` for every overridable
+    SIMULATION CONTROLS sub-block, so each writer asks for its own. A table
+    that was not prefetched is absent, which leaves its writer on the
+    dictionary defaults -- the behaviour every caller had before.
+
+    Resolved against a resolver prefetched in the parent process: a loky
+    worker re-imports the package and would see only the model defaults.
     """
     if parameter_resolver is None:
-        return None
-    try:
-        return parameter_resolver.resolve_management(
-            "dssat", "dssat_x_simulation_method", idMangt,
-            season_order, plant_order,
-        )
-    except RuntimeError:
-        # Not prefetched for this table: the caller did not ask for
-        # overrides, so the dictionary defaults stand.
-        return None
+        return {}
+    resolved = {}
+    for table in OVERRIDABLE_TABLES:
+        try:
+            resolved[table] = parameter_resolver.resolve_management(
+                "dssat", table, idMangt, season_order, plant_order,
+            )
+        except RuntimeError:
+            continue
+    return resolved
 
 
 def dictionary_or_override(DT, overrides, champ):
@@ -1337,88 +1360,72 @@ def writeBlockMethod(
 
 
 
-def writeBlockManagement(dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection):
+def writeBlockManagement(
+    dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection,
+    overrides=None,
+):
     fileContent = ""
     siteColumnsHeader = "@N MANAGEMENT  PLANT IRRIG FERTI RESID HARVS"
     dssat_queryRead = "Select Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'dssat') And ([Table] = '%s'));"%(dssat_tableName)
     DT = pd.read_sql_query(dssat_queryRead, modelDictionary_Connection)
     fileContent += siteColumnsHeader + "\n"
-    rw = DT[DT["Champ"] == "LNSIM"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "LNSIM")
     fileContent += v_fmt_simulation["N"].format(float(Dv))
-    rw = DT[DT["Champ"] == "TITMAT"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "TITMAT")
     fileContent += v_fmt_simulation["MANAGEMENT"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "IPLTI"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IPLTI")
     fileContent += v_fmt_simulation["PLANT"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "IIRRI"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IIRRI")
     fileContent += v_fmt_simulation["IRRIG"].format(Dv.strip())  #TODO: Check if this management option should not be provided from the MasterInput database
-    rw = DT[DT["Champ"] == "IFERI"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IFERI")
     fileContent += v_fmt_simulation["FERTI"].format(Dv.strip())  #TODO: Check if this management option should not be provided from the MasterInput database
-    rw = DT[DT["Champ"] == "IRESI"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IRESI")
     fileContent += v_fmt_simulation["RESID"].format(Dv.strip())  
-    rw = DT[DT["Champ"] == "IHARI"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IHARI")
     fileContent += v_fmt_simulation["HARVS"].format(Dv.strip()) + "\n"
     return fileContent
     
 
 
-def writeBlockoutputs(dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection, dailyoutput):
+def writeBlockoutputs(
+    dssat_tableName, dssat_tableId, idSim, modelDictionary_Connection,
+    dailyoutput, overrides=None,
+):
     fileContent = ""
     daily = "Y" if dailyoutput == 1 else "N"
     siteColumnsHeader = "@N OUTPUTS     FNAME OVVEW SUMRY FROPT GROUT CAOUT WAOUT NIOUT MIOUT DIOUT VBOSE CHOUT OPOUT"
     dssat_queryRead = "Select Champ, Default_Value_Datamill, defaultValueOtherSource, IFNULL([defaultValueOtherSource],  [Default_Value_Datamill]) As dv From Variables Where ((model = 'dssat') And ([Table] = '%s'));"%(dssat_tableName)
     DT = pd.read_sql_query(dssat_queryRead, modelDictionary_Connection)
     fileContent += siteColumnsHeader + "\n"
-    rw = DT[DT["Champ"] == "LNSIM"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "LNSIM")
     fileContent += v_fmt_simulation["N"].format(float(Dv))
-    rw = DT[DT["Champ"] == "TITOUT"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "TITOUT")
     fileContent += v_fmt_simulation["OUTPUTS"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "IOX"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IOX")
     fileContent += v_fmt_simulation["FNAME"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "IDETO"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IDETO")
     fileContent += v_fmt_simulation["OVVEW"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "IDETS"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IDETS")
     fileContent += v_fmt_simulation["SUMRY"].format(Dv.strip())
-    rw = DT[DT["Champ"] == "FROP"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "FROP")
     fileContent += v_fmt_simulation["FROPT"].format(int(Dv))
-    rw = DT[DT["Champ"] == "IDETG"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IDETG")
     fileContent += v_fmt_simulation["GROUT"].format(daily)#format(Dv.strip())
-    rw = DT[DT["Champ"] == "IDETC"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IDETC")
     fileContent += v_fmt_simulation["CAOUT"].format(daily)#format(Dv.strip())
-    rw = DT[DT["Champ"] == "IDETG"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IDETG")
     fileContent += v_fmt_simulation["WAOUT"].format(daily)#format(Dv.strip())
-    rw = DT[DT["Champ"] == "IDETN"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IDETN")
     fileContent += v_fmt_simulation["NIOUT"].format(daily)#format(Dv.strip())
-    rw = DT[DT["Champ"] == "IDETP"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IDETP")
     fileContent += v_fmt_simulation["MIOUT"].format(daily)#format(Dv.strip())
-    rw = DT[DT["Champ"] == "IDETD"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IDETD")
     fileContent += v_fmt_simulation["DIOUT"].format(daily)#format(Dv.strip())
-    rw = DT[DT["Champ"] == "IDETG"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IDETG")
     fileContent += v_fmt_simulation["VBOSE"].format("N")#format(Dv.strip())
-    rw = DT[DT["Champ"] == "IDETC"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IDETC")
     fileContent += v_fmt_simulation["CHOUT"].format(daily)#format(Dv.strip())
-    rw = DT[DT["Champ"] == "IDETG"]
-    Dv = rw["dv"].values[0]
+    Dv = dictionary_or_override(DT, overrides, "IDETG")
     fileContent += v_fmt_simulation["OPOUT"].format(Dv.strip()) + "\n"
     return fileContent
 

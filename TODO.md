@@ -80,6 +80,21 @@ and linked to an issue or pull request when one exists.
   and over the default, in that order, which is what the soil writers
   already do; `prefetch_point` runs in the parent, since a worker sees only
   the defaults. No override means no change, verified on a real run.
+- [x] All five `SIMULATION CONTROLS` sub-blocks are overridable per
+  crop-season, not the methods alone: `_general`, `_option`, `_method`,
+  `_management` and `_outputs`. `simulation_overrides` now returns one entry
+  per table so each writer asks for its own -- which matters because `LNSIM`
+  numbers every sub-block, and a single flat mapping would let an override
+  of one renumber the others.
+
+  `_management` carries `HARVS`, so a season can ask to be harvested at
+  maturity, the equivalent of STICS's `codrecolte = 1` and the last known
+  obstacle for the peanut. Verified end to end: an `IHARI = M` override on
+  season 2 produces two `SM` blocks, the second carrying `MA ... M`, and the
+  peanut comes out `Harvest 619 = Mat 619` against `Harvest 716` without it,
+  while seasons 1 and 3 are untouched. The `IIRRI` and `IFERI` switches,
+  whose `TODO` comments asked whether they should come from the database,
+  are reachable the same way.
 - [ ] Wire the export to the remaining override tables it does not honour.
   `OVERRIDABLE_TABLES` in `dssatxconverter.py` lists only
   `dssat_x_simulation_method`; every other writer reads
