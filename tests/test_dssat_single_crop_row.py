@@ -149,3 +149,81 @@ def test_no_converter_asks_numpy_for_the_truth_of_a_column():
         "a whole column's truth is ambiguous; test the row being written:\n"
         + "\n".join(offenders)
     )
+
+
+# --- reading the right table's column -------------------------------------
+
+#: The bare column names `writeBlockInitialConditionData` reads. Its query
+#: expands `Soil.*`, `SoilLayers.*` and `InitialConditions.*`, and the three
+#: share `bd`, `Wwp`, `Wfc`, `cf`, `OrganicC`, `pH`, `Ssat` and `Ssks`. The
+#: ambiguous ones are aliased in the SELECT -- `Soil.Wwp`, `SoilLayers.Wwp`
+#: and so on -- so the names below must each resolve to one table.
+BARE_NAMES = (
+    "Ldown", "NumLayer", "SoilOption", "SoilTotalDepth",
+    "WStockinit", "Ninit", "NH4initf",
+)
+
+INITIAL_CONDITIONS_QUERY = """
+    SELECT DISTINCT Soil.IdSoil AS 'Soil.IdSoil',
+        Soil.Wwp AS 'Soil.Wwp', Soil.Wfc AS 'Soil.Wfc',
+        Soil.cf AS 'Soil.cf', Soil.bd as 'soil.bd', Soil.*,
+        SoilLayers.Wwp AS 'SoilLayers.Wwp', SoilLayers.Wfc AS 'SoilLayers.Wfc',
+        SoilLayers.cf AS 'SoilLayers.cf', SoilLayers.*,
+        InitialConditions.* FROM InitialConditions INNER JOIN
+        ((Soil INNER JOIN SimUnitList ON Lower(Soil.IdSoil) = Lower(SimUnitList.idsoil))
+         LEFT JOIN SoilLayers ON Lower(Soil.IdSoil) = Lower(SoilLayers.idsoil))
+        ON InitialConditions.idIni = SimUnitList.idIni
+        WHERE IdSim = ? ORDER BY NumLayer
+"""
+
+
+def initial_conditions_frame(masterinput_copy):
+    import pandas as pd
+
+    link = sqlite3.connect(str(masterinput_copy))
+    try:
+        return pd.read_sql_query(
+            INITIAL_CONDITIONS_QUERY, link,
+            params=("5.925_6.025_2001_FERT_MIN_ORG_2",),
+        )
+    finally:
+        link.close()
+
+
+@pytest.mark.parametrize("name", BARE_NAMES)
+def test_a_bare_column_name_belongs_to_one_table(name, masterinput_copy):
+    """A name present in two of the joined tables would silently read the
+    first one's value -- the whole soil's where the layer's is meant -- and
+    nothing would fail. Aliasing is what prevents it, so a schema change
+    that makes one of these ambiguous has to be noticed here."""
+    frame = initial_conditions_frame(masterinput_copy)
+
+    assert list(frame.columns).count(name) == 1, (
+        f"{name!r} is no longer unambiguous in this join; read it through an"
+        " alias as Soil.Wwp and SoilLayers.Wwp already are"
+    )
+
+
+def test_the_ambiguous_columns_are_reachable_under_both_names(masterinput_copy):
+    """What the aliases are for: the whole soil's value and the layer's,
+    told apart."""
+    frame = initial_conditions_frame(masterinput_copy)
+
+    for column in ("Soil.Wwp", "Soil.Wfc", "Soil.cf", "soil.bd",
+                   "SoilLayers.Wwp", "SoilLayers.Wfc", "SoilLayers.cf"):
+        assert column in frame.columns
+
+
+def test_a_column_of_this_frame_is_a_series_not_a_frame(masterinput_copy):
+    """`frame[name]` returns a DataFrame when the name is duplicated, and
+    then `.values[i]` is a whole row and `pd.notna` an array -- which is how
+    the residues column raised. pandas suffixes the duplicates instead, so
+    every lookup here yields a Series and a scalar."""
+    import pandas as pd
+
+    frame = initial_conditions_frame(masterinput_copy)
+
+    for name in BARE_NAMES:
+        column = frame[name]
+        assert isinstance(column, pd.Series), name
+        assert column.values.ndim == 1, name
