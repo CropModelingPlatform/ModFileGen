@@ -430,13 +430,21 @@ nutrient -- and the override tables keep what one model asks in addition.
 
 The import is the easy half. For an override to have any effect, **the
 writer that emits the value must read it through the resolver** instead of
-taking the dictionary default. Today exactly one does:
-`dssat_x_simulation_method`, through `OVERRIDABLE_TABLES` in
-`dssatxconverter.py`, which the `MEPHO` work added.
+taking the dictionary default. The soil level is broadly wired already --
+`resolve` and `resolve_layers` are used by STICS v11 `paramsol`, DSSAT's
+soil and X writers, APSIM's soil writer and CELSIUS. What is not:
 
-Every other writer takes `DT[DT["Champ"] == name]["dv"].values[0]` directly.
-Routing them through `ParameterResolver` is the bulk of the work, and it is
-uniform: the resolver already offers `resolve()` and `resolve_layers()` for
+- the **point** level is honoured by STICS v11's station writer and by
+  nothing else, so a `PointParameterOverrides` row does not reach a DSSAT or
+  APSIM weather file -- which is exactly where `WNDHT` lands;
+- the **crop-season** level is honoured by STICS v11 `fictec1` and, in
+  DSSAT, by `dssat_x_simulation_method` alone, through `OVERRIDABLE_TABLES`
+  in `dssatxconverter.py`, which the `MEPHO` work added. Every other DSSAT
+  writer takes `DT[DT["Champ"] == name]["dv"].values[0]` directly;
+- the **operation** level has nothing to honour yet.
+
+Routing a writer through `ParameterResolver` is uniform: it already offers
+`resolve()` and `resolve_layers()` for
 a soil, `resolve_management()` for a crop-season and `resolve_point()` for a
 point, and the prefetch must happen in the parent process because a worker
 sees only the defaults.

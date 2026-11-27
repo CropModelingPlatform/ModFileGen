@@ -155,14 +155,23 @@ table, which is what these tables exist to avoid.
 The fixture carries one row per model as a worked example, including
 `dssat.dssat_x_simulation_method.MEPHO = L` on the peanut season.
 
-**But the export only honours one table so far.** `OVERRIDABLE_TABLES` in
-`dssatxconverter.py` lists `dssat_x_simulation_method` and nothing else;
-every other writer takes `DT[DT["Champ"] == name]["dv"].values[0]` straight
-from the dictionary, so an override it does not know about has no effect.
-Adding one is a `TargetTable` in that set plus a `prefetch_management`,
-`prefetch` or `prefetch_point` call **in the parent process** — a worker
-sees only the defaults. `docs/dssat_import_mapping.md` says which tables an
-import of a real experiment needs, and in what order.
+**What the export honours today, by level.** The soil level is broadly
+wired: `resolve` and `resolve_layers` are used by STICS v11 `paramsol`,
+DSSAT's soil and X writers, APSIM's soil writer and CELSIUS. The point
+level is wired for **STICS v11's station only**, so a `PointParameterOverrides`
+row has no effect on a DSSAT or APSIM weather file -- which is where `WNDHT`
+would land. The crop-season level is wired for STICS v11 `fictec1` and, in
+DSSAT, for `dssat_x_simulation_method` alone, listed in `OVERRIDABLE_TABLES`
+in `dssatxconverter.py`; every other DSSAT writer takes
+`DT[DT["Champ"] == name]["dv"].values[0]` straight from the dictionary, so an
+override it does not know about is inert. The operation level has nothing,
+because the table is not built yet.
+
+Adding a level to a writer is a `TargetTable` in the overridable set plus a
+`prefetch`, `prefetch_management` or `prefetch_point` call **in the parent
+process** -- a worker sees only the defaults.
+`docs/dssat_import_mapping.md` says which an import of a real experiment
+needs.
 
 **`NYERS` cannot bound a DSSAT sequence at a season count.** `CSM.for` uses
 it once, at the first run, for `YRDOY_END = (year + NYERS) * 1000 + day - 1`,
