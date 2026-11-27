@@ -200,17 +200,26 @@ and linked to an issue or pull request when one exists.
     `MI_Connection`, which is why a search for `master_input_connection`
     misses it.
   Only the irrigation block was a real defect, and it is fixed.
-- [ ] `*SOIL ANALYSIS` is written entirely from the dictionary: `SADAT
-  00001`, one phantom layer at 15 cm, and every measurement at `-99`, while
-  `SoilLayers` holds `bd`, `OrganicC`, `TotalN` and `pH` per layer. It is
-  harmless as it stands -- `IPSLIN.for:358` takes a value above `-1.E-6` as
-  an override of the soil profile, so `-99` leaves `XX.SOL` intact -- but
-  the opportunity is real: `WARNING.OUT` reports "Organic C data in one or
-  more soil layers are zero or missing" and DSSAT estimates OC for layers 4
-  to 7 from texture. Filling the analysis from `SoilLayers` would give it
-  measured values instead, and would change results, so it is an agronomic
-  decision rather than a cleanup. The meaningless `SADAT` is cosmetic either
-  way.
+- [x] `*SOIL ANALYSIS` written from the dictionary is not a problem. Every
+  measurement is `-99`, and `IPSLIN.for:358` treats anything above `-1.E-6`
+  as an override of the soil profile, so `-99` leaves `XX.SOL` intact. DSSAT
+  then estimates organic carbon from texture where none is given, which is
+  its documented behaviour and the intended one; supplying values per layer
+  remains possible through the detailed soil representation. The meaningless
+  `SADAT 00001` is cosmetic.
+- [x] The zero organic carbon on the second `XX.SOL` layer is the simple
+  soil representation, not a lost value. `Soil.SoilOption` is `simple` for
+  the fixture's soil, and a simple soil is written as two DSSAT lines by
+  design: the declared `OrganicC` in the top 30 cm -- 0.933, written as
+  0.868 after the fine-earth correction -- and zero below. I suspected a
+  defect because the written depths (30, 175) do not match the `SoilLayers`
+  rows (30, 145); those rows belong to the detailed representation, which
+  this soil does not use.
+- [ ] The fixture declares two `SoilLayers` rows for a soil whose
+  `SoilOption` is `simple`, so they are never read. Harmless, but they look
+  authoritative and sent this audit down a false trail. Either set the soil
+  to `detailed` -- which would exercise the layer path, currently untested
+  end to end -- or drop the rows.
 - [ ] `writeBlockField` derives both the weather station code and the soil
   id from `idMangt[0:4].upper()`, so they name the management rather than the
   point. It is internally consistent -- the `.WTH` and `.SOL` files follow
