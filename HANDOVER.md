@@ -26,7 +26,7 @@ Two constraints the user set explicitly and that still hold:
   modified and they are to stay that way: `tests/conftest.py`,
   `tests/apsim/*`, `tests/test_sticsconverter*`, `tests/test_tempopar*`, the
   notebooks, and two databases under `tests/data`. They are "lot A". Ask
-  before committing any of them. A fresh clone therefore has the 574 tests
+  before committing any of them. A fresh clone therefore has the tests
   written on this branch but not those adaptations, so some APSIM and legacy
   STICS tests may fail for someone else. `docs/stics/` is untracked for a
   separate reason, already in `TODO.md`: 572 KB of generated HTML.
@@ -39,8 +39,8 @@ conda run -n agrometflow python -m pytest -q -o addopts=""
 
 The `agrometflow` environment is the one with the dependencies; `base` lacks
 `joblib`. The `-o addopts=""` is needed because `pyproject.toml` adds
-`--cov=modfilegen`, and `pytest-cov` is not always installed. Expect
-**574 passed, 3 skipped**.
+`--cov=modfilegen`, and `pytest-cov` is not always installed. The suite
+passes whole; a failure is a regression, not a known state.
 
 Engines live at `/opt/stics/bin`, `/opt/sticsv11/bin`, `/usr/bin/dssat`,
 `/usr/bin/dssatv48`, `/usr/share/apsim`, `/usr/share/celsius*`. All eight
@@ -49,6 +49,22 @@ report `ok` here, so end-to-end runs are possible on this machine.
 A Windows copy of the tree is at `/mnt/c/Users/midingoyi/ModFileGen`. It was
 kept in step by file copies; now that the branch is pushed, `git pull` there
 is the better route.
+
+### Check an edit applied before committing it
+
+Editing by exact-string replacement is the right tool here -- these files
+are long and a line number moves -- but a replacement that matches nothing
+fails *silently as far as the commit is concerned*. A script that asserts
+its match aborts; the `git commit` chained after it in the same command
+still runs, and the result is a commit whose message describes a change the
+files do not contain. That happened twice on this branch, to `TODO.md` both
+times, and was only noticed afterwards.
+
+So: run the edit, **read back the passage**, then commit. Never chain an
+edit and a commit in one command when the match is not certain. If a
+replacement fails, the text has drifted -- read the current wording rather
+than widening the pattern until something matches, because a pattern loose
+enough to match twice will edit the wrong place.
 
 ### Run something
 
@@ -123,7 +139,7 @@ build:
 | `CropManagementParameterOverrides` | `idMangt, SeasonOrder, PlantOrder, Model, TargetTable, Parameter` | one crop-season |
 | `PointParameterOverrides` | `idPoint, Model, TargetTable, Parameter` | a point, so a weather station |
 | an extension of `InitialConditions` | `idIni` | one set of initial conditions |
-| `OperationParameterOverrides`, to build | `idOperation, Model, TargetTable, Parameter` | one irrigation, fertiliser, residue or tillage operation |
+| `OperationParameterOverrides`, agreed and to build | `idOperation, Model, TargetTable, Parameter` | one irrigation, fertiliser, residue or tillage operation |
 
 The rule: **store a value only when it differs from the `ModelsDictionary`
 default**, so the tables hold the delta between an experiment and the
