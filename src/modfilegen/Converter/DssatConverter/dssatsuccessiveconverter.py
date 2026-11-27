@@ -301,6 +301,39 @@ def season_year_offset(management):
     raise KeyError("SeasonYearOffset")
 
 
+def season_harvest_date(simunit_row, season_row, management):
+    """The harvest date DSSAT is given for one season of a rotation.
+
+    The season's window runs until the day before the next season's first
+    operation, which is right for the window but wrong as a harvest: it
+    left the crop standing for the whole interval. The fixture's peanut was
+    sown on day 150 and harvested 364 days later, and CROPGRO refused it --
+    300 flower cohorts, one per day of flowering, on a crop that never
+    matured.
+
+    ``DHarvest`` is the declared duration from sowing, so it is used as a
+    ceiling: the window end while it is shorter, sowing plus ``DHarvest``
+    when the window is longer. DSSAT needs no continuity here, since it
+    starts the next run the day after this one ends and simulates bare soil
+    until that season's own sowing.
+
+    A ``DHarvest`` of zero, or none at all, declares no duration, and the
+    window stands as before.
+    """
+    window_end = row_end_date(season_row)
+    try:
+        duration = int(management.get("DHarvest") or 0)
+    except (TypeError, ValueError):
+        return window_end
+    if duration <= 0:
+        return window_end
+    planting = julian_date(
+        int(simunit_row["StartYear"]) + season_year_offset(management),
+        int(management["sowingdate"]),
+    )
+    return min(window_end, planting + timedelta(days=duration))
+
+
 def apply_successive_management_dates(sections, simunit_row, season_row, management):
     """Replace legacy standard-mode dates with successive calendar dates."""
     planting = julian_date(
@@ -1058,7 +1091,8 @@ def generate_rotation_input(
     sections = parse_sections(read_generated_xfile(single_dir))
     apply_successive_management_dates(sections, row, season_row, management)
     set_section_date(
-        sections, "*HARVEST", date_to_yydoy(row_end_date(season_row))
+        sections, "*HARVEST",
+        date_to_yydoy(season_harvest_date(row, season_row, management)),
     )
     generated_xfile_path(single_dir).write_text(render_sections(sections))
     return RotationInput(
@@ -1232,6 +1266,24 @@ def export_grouped_weather(group, context, sequence_dir):
         )
 
 
+def sown_after_the_simulation(record, row):
+    """Whether this run was sown past the end of its declared simulation.
+
+    ``PDAT`` is the planting date DSSAT reports, as ``YYYYDDD``. A row with
+    no declared end, or a summary with no ``PDAT``, cannot be judged and is
+    kept: refusing what cannot be measured would lose real seasons.
+    """
+    try:
+        planting = int(float(record.get("PDAT", 0)))
+        end_year = int(row["EndYear"])
+        end_day = int(row["EndDay"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    if planting <= 0:
+        return False
+    return planting > end_year * 1000 + end_day
+
+
 def transform_sequence(summary_path, rotations, coordinates=None):
     with open(summary_path, "r", **text_files.READ_ENGINE) as handle:
         lines = handle.readlines()
@@ -1274,6 +1326,15 @@ def transform_sequence(summary_path, rotations, coordinates=None):
             if repeated_single_rotation
             else int(rotation.management["SeasonOrder"])
         )
+        if sown_after_the_simulation(record, row):
+            # DSSAT cycles the treatment list until its NYERS interval runs
+            # out, and NYERS is a whole number of years counted from the
+            # start day, so slack after the last declared harvest cannot be
+            # avoided -- 133 days on the fixture's rotation. A cycle that
+            # sows beyond the simulation's own end was not asked for. One
+            # that sows inside it was: a single-season management is meant
+            # to repeat over the period.
+            continue
         sdat = int(record.get("SDAT", 0))
         record["time"] = sdat // 1000 if sdat > 0 else None
         record["lat"] = coordinates.latitude if coordinates else None

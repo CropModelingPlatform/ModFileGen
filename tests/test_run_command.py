@@ -487,3 +487,33 @@ def test_a_run_that_produced_its_applicable_work_passes(
 
     assert status == 0
     assert "1 crop-seasons produced" in stream.getvalue()
+
+
+def test_a_run_that_produced_more_than_its_work_also_fails(
+    inputs, engine_is_ready, monkeypatch, global_variables
+):
+    """DSSAT cycles its treatment list to fill the NYERS interval, and those
+    extra runs once reached the output as seasons nobody asked for. A check
+    that only looked for a shortfall said nothing."""
+    from modfilegen import Converter
+
+    monkeypatch.setattr(
+        run_command, "crop_seasons",
+        lambda database, model, mode: {
+            "requested": 10, "applicable": 1, "declined": {"an association": 9},
+        },
+    )
+
+    def produce_too_much():
+        with open(os.path.join(inputs["out"], "x_dssat.csv"), "w") as stream:
+            stream.write("IdSim\na\nb\n")
+
+    monkeypatch.setattr(Converter, "run_dssat", produce_too_much)
+    stream = io.StringIO()
+
+    status = run_command.perform(
+        options(inputs, model="dssat", version="v48"), stream
+    )
+
+    assert status == 1
+    assert "2 crop-seasons were produced where 1 were applicable" in stream.getvalue()

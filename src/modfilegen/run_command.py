@@ -356,6 +356,17 @@ def perform(arguments, stream):
                 "errors above.\n"
             )
             return 1
+        elif produced > counts["applicable"]:
+            # An excess is a defect too. DSSAT cycles its treatment list to
+            # fill the NYERS interval, and those extra runs once reached the
+            # output as seasons nobody asked for; a check that only looked
+            # for a shortfall said nothing.
+            stream.write(
+                f"{produced} crop-seasons were produced where "
+                f"{counts['applicable']} were applicable. The surplus was "
+                "not asked for: see the errors above.\n"
+            )
+            return 1
         else:
             stream.write(f"{produced} crop-seasons produced.\n")
     return 0
