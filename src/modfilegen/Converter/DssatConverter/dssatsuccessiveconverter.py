@@ -1187,6 +1187,15 @@ def prefetch_soil_services(context, rows, coordinate_resolver):
         dssatxconverter.OVERRIDABLE_TABLES,
         {row["idMangt"] for row in rows},
     )
+    # The weather station parameters of each point, so a
+    # PointParameterOverrides row reaches the .WTH header. Prefetched here
+    # with the rest: a worker re-imports the package and sees only the
+    # dictionary defaults.
+    context["parameter_resolver"].prefetch_point(
+        "dssat",
+        [dssatweatherconverter.WEATHER_SITE_TABLE],
+        {row["idPoint"] for row in rows},
+    )
     coordinate_resolver.prefetch({row["idPoint"] for row in rows})
     context["coordinate_resolver"] = coordinate_resolver
     context["soil_files"] = {}
@@ -1316,6 +1325,7 @@ def export_grouped_weather(group, context, sequence_dir):
         context["master_input_connection"],
         sequence_dir,
         years=years,
+        parameter_resolver=context["parameter_resolver"],
     )
     remember_weather(point, years, generated)
     if len(generated) != len(years):

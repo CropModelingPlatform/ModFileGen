@@ -51,6 +51,30 @@ def rollover_weather_rows(rows, weather_year):
     return copied_rows
 
 
+#: The ModelsDictionary table holding the weather station parameters, and
+#: so the ``TargetTable`` a PointParameterOverrides row names.
+WEATHER_SITE_TABLE = "dssat_weather_site"
+
+
+def site_parameter(parameter_resolver, point_id, name, value):
+    """``value``, unless a point override applies to this station.
+
+    STICS has honoured point overrides at its station writer since the
+    beginning; DSSAT did not, so the same database described two different
+    stations to the two models.
+    """
+    if parameter_resolver is None:
+        return value
+    if not parameter_resolver.has_point_override(
+        "dssat", WEATHER_SITE_TABLE, name, point_id
+    ):
+        return value
+    resolved = parameter_resolver.resolve_point(
+        "dssat", WEATHER_SITE_TABLE, point_id
+    )
+    return resolved[name.casefold()]
+
+
 def parse_weather_directory(directory_path):
     parts = path_parts(directory_path)
     site = parts[-3]
@@ -142,6 +166,7 @@ class DssatweatherConverter(Converter):
         thirdyear=None,
         single_file=False,
         file_name=None,
+        parameter_resolver=None,
     ):
         """Export DSSAT weather files with legacy and explicit-year arguments."""
         _, start_year, _ = parse_weather_directory(directory_path)
@@ -154,6 +179,7 @@ class DssatweatherConverter(Converter):
             years=years,
             single_file=single_file,
             file_name=file_name,
+            parameter_resolver=parameter_resolver,
         )
 
     def export_years(
@@ -165,6 +191,7 @@ class DssatweatherConverter(Converter):
         years=None,
         single_file=False,
         file_name=None,
+        parameter_resolver=None,
     ):
         """Export weather files for explicit years."""
         res = {}
@@ -188,6 +215,17 @@ class DssatweatherConverter(Converter):
             site_row = coordinates[0]
             tav = coordinate_value(site_row, "tav", tav)
             amp = coordinate_value(site_row, "amp", amp)
+
+            # An explicit PointParameterOverrides row wins over both the
+            # Coordinates column and the dictionary default, which is the
+            # order the soil writers already use: a measured value stands
+            # unless someone overrode it on purpose. WNDHT is the one that
+            # matters -- it is the weather measurement height, STICS's zr,
+            # and the dictionary default sits below a tall canopy.
+            tav = site_parameter(parameter_resolver, site, "tav", tav)
+            amp = site_parameter(parameter_resolver, site, "amp", amp)
+            refht = site_parameter(parameter_resolver, site, "refht", refht)
+            wndht = site_parameter(parameter_resolver, site, "wndht", wndht)
 
             years = normalize_export_years(start_year, years=years)
 

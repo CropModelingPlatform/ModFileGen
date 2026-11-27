@@ -71,7 +71,16 @@ and linked to an issue or pull request when one exists.
   `(idOperation, Model, TargetTable, Parameter)` where `idOperation` is the
   operation row's own key, so a value belonging to one irrigation,
   fertiliser, residue or tillage operation has a home.
-- [ ] Wire the export to the override tables it does not yet honour.
+- [x] DSSAT's weather writer honours `PointParameterOverrides`. STICS v11's
+  station writer had from the start, DSSAT's did not, so the same database
+  described two different stations to the two models. `WNDHT` is why it
+  matters: the height at which the weather was measured, STICS's `zr`, whose
+  2.0 m dictionary default sits below a 2.5 m canopy -- the value raised by
+  hand in the fixture. An override now wins over the `Coordinates` column
+  and over the default, in that order, which is what the soil writers
+  already do; `prefetch_point` runs in the parent, since a worker sees only
+  the defaults. No override means no change, verified on a real run.
+- [ ] Wire the export to the remaining override tables it does not honour.
   `OVERRIDABLE_TABLES` in `dssatxconverter.py` lists only
   `dssat_x_simulation_method`; every other writer reads
   `DT[DT["Champ"] == name]["dv"].values[0]` straight from the dictionary, so

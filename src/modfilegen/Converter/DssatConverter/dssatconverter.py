@@ -247,6 +247,11 @@ def process_chunk(*args):
         dssatxconverter.OVERRIDABLE_TABLES,
         {row["idMangt"] for row in chunk},
     )
+    parameter_resolver.prefetch_point(
+        "dssat",
+        [dssatweatherconverter.WEATHER_SITE_TABLE],
+        {row["idPoint"] for row in chunk},
+    )
         
     for i, row in enumerate(chunk):
         write_header = not os.path.exists(tmp_csv)
@@ -273,7 +278,11 @@ def process_chunk(*args):
             climid =  ".".join([str(row["idPoint"]), str(row["StartYear"])])
             if climid not in weathertable:
                 weatherconverter = dssatweatherconverter.DssatweatherConverter()
-                r = weatherconverter.export(simPath,  ModelDictionary_Connection,MasterInput_Connection, usmdir, thirdyear)
+                r = weatherconverter.export(
+                    simPath, ModelDictionary_Connection, MasterInput_Connection,
+                    usmdir, thirdyear,
+                    parameter_resolver=parameter_resolver,
+                )
                 weathertable[climid] = r
                 del weatherconverter  # Free converter
             else:

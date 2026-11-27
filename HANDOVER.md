@@ -158,9 +158,10 @@ The fixture carries one row per model as a worked example, including
 **What the export honours today, by level.** The soil level is broadly
 wired: `resolve` and `resolve_layers` are used by STICS v11 `paramsol`,
 DSSAT's soil and X writers, APSIM's soil writer and CELSIUS. The point
-level is wired for **STICS v11's station only**, so a `PointParameterOverrides`
-row has no effect on a DSSAT or APSIM weather file -- which is where `WNDHT`
-would land. The crop-season level is wired for STICS v11 `fictec1` and, in
+level is wired for STICS v11's station and, since
+`tests/test_dssat_weather_point_override.py`, for DSSAT's weather header --
+so `WNDHT`, `REFHT`, `TAV` and `AMP` are overridable per point there. APSIM's
+weather writer still is not. The crop-season level is wired for STICS v11 `fictec1` and, in
 DSSAT, for `dssat_x_simulation_method` alone, listed in `OVERRIDABLE_TABLES`
 in `dssatxconverter.py`; every other DSSAT writer takes
 `DT[DT["Champ"] == name]["dv"].values[0]` straight from the dictionary, so an
