@@ -101,13 +101,28 @@ and linked to an issue or pull request when one exists.
   association check at all, unlike the successive converter: it took whichever
   plant row came back first and wrote a single-crop simulation from an
   intercrop, dropping a crop with no message.
-- [ ] `writeBlockResidues` was asking numpy for the truth of a whole column
+- [x] `writeBlockResidues` asked numpy for the truth of a whole column
   (`if dataTable["idresidueDssat"].values:`), which works with one residue
   row and raises with two, so no management applying organic matter twice
-  could be converted. Fixed to test the row being written. Worth sweeping the
-  DSSAT converters for the same shape: this one was the only `.values :`
-  spelling, but `.values[0]` on a multi-row frame is the same class of bug and
-  standard mode reads every season of a rotation management.
+  could be converted. Fixed to test the row being written, and a guard in
+  `tests/test_dssat_single_crop_row.py` refuses that spelling anywhere under
+  `Converter/`.
+- [x] The `.values[0]` sweep is done. 299 sites in the DSSAT converters:
+  251 are dictionary lookups (`DT[DT["Champ"] == ...]`), safe by
+  construction; 12 are in `writeBlockInitialConditionData`, which loops over
+  the frame properly; the remaining 36 read a frame joined to
+  `CropManagement` and take the first row -- `writeBlockTreatment`,
+  `Cultivar`, `InitialCondition`, `PlantingDetail`, `Harvest`, `General`,
+  `AutomaticPlanting`, `AutomaticHarvest`.
+
+  They are correct, but only because the frame holds one row: standard mode
+  refuses a management with several plants or several seasons, and that guard
+  sits in the cultivar converter, which `process_chunk` calls before the X
+  writer; successive mode hands the writers a database restricted to one
+  `(idMangt, SeasonOrder, PlantOrder)`. Neither guarantee is local to those
+  functions, and both were added for other reasons, so
+  `tests/test_dssat_single_crop_row.py` now pins the invariant in both modes
+  and the call order that makes the standard one hold.
 - [x] `agriscale run` reconciles what was asked with what ran.
   `modfilegen.Converter.DssatConverter.applicability` answers, without
   running anything, how many crop-seasons a database asks for and how many
