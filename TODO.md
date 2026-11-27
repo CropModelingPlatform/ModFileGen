@@ -12,6 +12,44 @@ and linked to an issue or pull request when one exists.
 
 ## Next
 
+- [ ] Build an **import** level, so that a real model experiment can be
+  round-tripped: model files → run → `MasterInput` → export → run → compare
+  the two runs' output variables. It is the only test that would have caught
+  every DSSAT defect found on this branch, because each showed up as a
+  difference between an original run and a regenerated one. The corpus
+  exists and is validated by the model authors: `dssat-csm-data` ships
+  hundreds of experiments with their soils and weather, and JavaSTICS 175
+  example workspaces. No reference output needs shipping -- the original is
+  run on the same machine with the same engine, so any difference belongs to
+  the round trip.
+
+  `docs/dssat_import_mapping.md` maps `Maize/BRPI0202.MZX` section by
+  section against `MasterInput`, with its soil `BRPI020001` and weather
+  `BRPI0201.WTH`. The structure fits: simulations, managements, operations,
+  soil, weather, cultivars. What does not, and changes results, is a second
+  layer of detail -- row spacing and sowing depth, fertiliser material and
+  depth, irrigation method per application, initial residue mass and its
+  nitrogen, the previous crop, the root growth factor, the wind measurement
+  height, harvest at maturity, and soil analysis when it has values.
+
+  So the order of work is: grow the schema for that list, then write the
+  import, then compare. Starting with the import would produce a long list
+  of accepted differences, and that list is where this kind of project
+  dies. Two structural findings are in the document: a DSSAT treatment is a
+  vector of pointers and its factorial design is flattened into one
+  `SimUnitList` row per treatment -- acceptable, and the reason to compare
+  outputs rather than input files -- and `*SIMULATION CONTROLS` lives almost
+  entirely outside `MasterInput`, so importing it means writing
+  `CropManagementParameterOverrides` rows, which works but needs the other
+  `dssat_x_simulation_*` tables added to `OVERRIDABLE_TABLES`.
+- [ ] Add a `GeneralInformation` table for `*GENERAL`: people, address,
+  site, notes with the publications, and the plot geometry of the `PAREA`
+  line. None of it enters the simulation and all of it is what makes a
+  simulation citable. The key must be the experiment, not the database: a
+  `MasterInput` will hold several imported experiments, and one row per
+  database would attribute every later simulation to the first import's
+  provenance. `SimUnitList` references it.
+
 - [ ] Make ModFileGen usable on Windows and macOS without WSL, so students
   without admin rights can run it (branch `cross-platform`):
   1. **done in `71102ffd`**: `engine_runner.py` plus one `*runner.py` per
