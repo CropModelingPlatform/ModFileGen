@@ -184,11 +184,40 @@ and linked to an issue or pull request when one exists.
   it rolled a day past December into the next year but not a day below 1 into
   the previous one, so a crop sown early in the year with a pre-sowing
   operation produced a day of 0 or less.
-- [ ] Audit the other X-file blocks for the same shape. The irrigation one
-  took every value from the dictionary; the fertiliser and residue ones read
-  the database. Each remaining block should be checked for which of the two
-  it is, since a block written from defaults looks entirely plausible in the
-  file.
+- [x] The X-file blocks are audited. Twenty-eight writers; nine never see
+  MasterInput, and for most that is right:
+  * **simulation controls** -- `writeBlockMethod`, `writeBlockManagement`,
+    `writeBlockoutputs` -- are model options, and now overridable per
+    crop-season through `CropManagementParameterOverrides`;
+  * **automatic management** -- `writeBlockAutomaticIrrigation`, `...Nitrogen`,
+    `...Residue` -- is inert unless its switch is `A`;
+  * `writeBlockEnvironment` declares no modification and
+    `writeBlockChemicalApplication` no application, which is what the
+    database holds;
+  * `writeBlockTreatment2` writes the batch line (TRTNO, ROTNO, ROTOPT,
+    CRPNO), legitimately constant for a one-treatment batch;
+  * `writeBlockInitialConditionData` does read the database -- under the name
+    `MI_Connection`, which is why a search for `master_input_connection`
+    misses it.
+  Only the irrigation block was a real defect, and it is fixed.
+- [ ] `*SOIL ANALYSIS` is written entirely from the dictionary: `SADAT
+  00001`, one phantom layer at 15 cm, and every measurement at `-99`, while
+  `SoilLayers` holds `bd`, `OrganicC`, `TotalN` and `pH` per layer. It is
+  harmless as it stands -- `IPSLIN.for:358` takes a value above `-1.E-6` as
+  an override of the soil profile, so `-99` leaves `XX.SOL` intact -- but
+  the opportunity is real: `WARNING.OUT` reports "Organic C data in one or
+  more soil layers are zero or missing" and DSSAT estimates OC for layers 4
+  to 7 from texture. Filling the analysis from `SoilLayers` would give it
+  measured values instead, and would change results, so it is an agronomic
+  decision rather than a cleanup. The meaningless `SADAT` is cosmetic either
+  way.
+- [ ] `writeBlockField` derives both the weather station code and the soil
+  id from `idMangt[0:4].upper()`, so they name the management rather than the
+  point. It is internally consistent -- the `.WTH` and `.SOL` files follow
+  the same convention -- but one point generates a separate weather set per
+  management: the fixture's single point `5.925_6.025` produced `ROT_*.WTH`
+  (5 files) and `FERT_*.WTH` (3), the same weather written twice. Harmless
+  for five simulations, wasteful for thousands.
 - [x] The rotation runs under DSSAT v4.8: exit 0, no `ERROR.OUT`, four
   crop-seasons produced against four applicable. `DEMAND` was the harvest
   date, not `MEPHO`: the season window was written as `HDATE`, so the peanut
