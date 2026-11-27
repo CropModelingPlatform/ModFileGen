@@ -55,12 +55,22 @@ and linked to an issue or pull request when one exists.
   Two structural findings are in the document. A DSSAT treatment is a vector
   of pointers and its factorial design flattens into one `SimUnitList` row
   per treatment -- acceptable, and the reason to compare outputs rather than
-  input files. And the override mechanism reaches everything except a
-  **per-operation** value: no key names an operation, so `IROP` per
-  irrigation and `FMCD`, `FACD`, `FDEP` per fertiliser application need a
-  column on `IrrigationFOperations` and `InorganicFOperations`, which are
-  per-operation by nature, with a lookup for the codes as `ListResidues`
-  already does for residues.
+  input files.
+
+  And a per-operation value is reached the same way, because an operation
+  has an identity: the strategy is named from `CropManagement` and the
+  operation is that strategy plus its number -- `idIrrigation`, or
+  `(IrrigationPolicyCode, IrrigationNumber)`, with the same shape on
+  `InorganicFOperations`, `OrganicFOperations` and `SoilTillageOperations`.
+  So `IROP` per irrigation and `FMCD`, `FACD`, `FDEP` per fertiliser
+  application go in a fifth table, `OperationParameterOverrides`, keyed by
+  `(idOperation, Model, TargetTable, Parameter)`. A column on the operation
+  table would put a DSSAT material code in a model-neutral table, which is
+  what the override tables exist to avoid.
+- [ ] Add `OperationParameterOverrides`, keyed by
+  `(idOperation, Model, TargetTable, Parameter)` where `idOperation` is the
+  operation row's own key, so a value belonging to one irrigation,
+  fertiliser, residue or tillage operation has a home.
 - [ ] Wire the export to the override tables it does not yet honour.
   `OVERRIDABLE_TABLES` in `dssatxconverter.py` lists only
   `dssat_x_simulation_method`; every other writer reads
