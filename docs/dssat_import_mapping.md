@@ -326,8 +326,13 @@ converter already does that correction in the other direction
 (`_number(wwp) / 100 * fine_earth`). The import has to undo it, and getting
 it wrong is invisible in the files and visible in the yields.
 
-`SLU1`, `SLDR`, `SLNF`, `SLPF`, `SCOM`, `SLMH`, `SRGF`, `SCEC` have no home.
-`SRGF`, the root growth factor by layer, is the one that changes results.
+`SLU1`, `SLDR`, `SLNF`, `SLPF`, `SCOM`, `SALB` and `SLRO` are already
+overridable through `SoilParameterOverrides` with `TargetTable =
+dssat_soil_site`, and `SRGF`, `SLMH`, `SCEC` and the rest of the layer
+values through `dssat_soil_data` with `NumLayer`. The soil converter has
+used `resolve` and `resolve_layers` from the start, so this level needed no
+work -- verified by putting `SLDR 0.77` and `SRGF 0.420` in overrides and
+reading them back out of a generated `XX.SOL`.
 
 The weather file maps to `Coordinates` and `RAclimateD`:
 
@@ -370,8 +375,8 @@ routing problem:
 |---|---|---|---|---|
 | `PLRS`, `PLDP`, `PLME`, `PLDS`, `EDATE` | planting | `CropManagementParameterOverrides` | `dssat_x_planting_detail` | crop-season |
 | `HARVS`, and all of `OPTIONS`, `METHODS`, `MANAGEMENT`, `OUTPUTS`, `AUTOMATIC MANAGEMENT` | simulation controls | `CropManagementParameterOverrides` | `dssat_x_simulation_*` | crop-season |
-| `SRGF`, `SLMH` | soil, per layer | `SoilParameterOverrides` | the layer table | `NumLayer = 1..n` |
-| `SLDR`, `SLU1`, `SLNF`, `SLPF`, `SCOM` | soil, whole profile | `SoilParameterOverrides` | the site table | `NumLayer = 0` |
+| `SRGF`, `SLMH` | soil, per layer | `SoilParameterOverrides` | `dssat_soil_data` | `NumLayer = 1..n` — **done** |
+| `SLDR`, `SLU1`, `SLNF`, `SLPF`, `SCOM` | soil, whole profile | `SoilParameterOverrides` | `dssat_soil_site` | `NumLayer = 0` — **done** |
 | `SADM`, `SAOC`, `SANI`, `SAPHW`, `SAPX`, `SAKE` | soil analysis | `SoilParameterOverrides` | `dssat_x_soil_analysis_data` | `NumLayer = 1..n` |
 | `WNDHT`, `REFHT` | weather header | `PointParameterOverrides` | `dssat_weather_site` | point |
 | `PCR`, `ICDAT`, `ICRES`, `ICREN`, `ICRIP`, `ICRID` | initial conditions | extension of `InitialConditions` | — | `idIni` |
