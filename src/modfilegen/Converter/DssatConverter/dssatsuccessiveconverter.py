@@ -47,6 +47,7 @@ from .dssatconverter import (
     align_sqlite_table,
     fetch_data_from_sqlite,
     transform,
+    write_file,
 )
 
 
@@ -154,7 +155,16 @@ def build_successive_groups(rows):
     missing = sorted(required_columns.difference(dataframe.columns))
     if missing:
         raise ValueError(f"Missing columns in SimUnitList: {missing}")
-    return [[row] for row in dataframe.to_dict(orient="records")]
+    # Ordered by point, so that the simulations sharing one are handed to the
+    # same worker and can share its weather. A point carries as many
+    # rotations as the experiment has -- P1-P2-P3 and P1-P4-P5 are two
+    # managements of the same point -- and a weather file depends on the
+    # point and the year alone, never on the rotation. Without this order
+    # the per-worker cache below exists and never hits.
+    ordered = dataframe.sort_values(
+        ["idPoint", "idsim"], kind="stable"
+    ).to_dict(orient="records")
+    return [[row] for row in ordered]
 
 
 def validate_successive_group(group):
@@ -1249,9 +1259,57 @@ def run_dssat_b(usmdir, output_dir, dt, dssat_version="v47", executable=None):
     return result
 
 
+#: Weather already generated in this worker, as ``{year: file content}``
+#: for one point. A file's content depends on the point and the year alone,
+#: so every rotation of a point writes the same bytes under its own name.
+#:
+#: Module level on purpose: a loky worker keeps its process across tasks, so
+#: this survives from one group to the next, while nothing crosses between
+#: workers -- which is why the groups are ordered by point. Only one point is
+#: held, and changing point drops it, so the cache cannot grow with the
+#: database.
+_WEATHER_BY_YEAR = {}
+_WEATHER_POINT = None
+
+
+def cached_weather(point, years):
+    """The cached content for ``years``, or None if any year is missing."""
+    if _WEATHER_POINT != point:
+        return None
+    if any(year not in _WEATHER_BY_YEAR for year in years):
+        return None
+    return {year: _WEATHER_BY_YEAR[year] for year in years}
+
+
+def remember_weather(point, years, generated):
+    """Keep what was just generated, dropping another point's."""
+    global _WEATHER_POINT
+    if _WEATHER_POINT != point:
+        _WEATHER_BY_YEAR.clear()
+        _WEATHER_POINT = point
+    for name, content in generated.items():
+        # The name is "<station><yy>01.WTH"; match its yy back to the year
+        # asked for, which is unambiguous inside one sequence.
+        matched = [year for year in years if str(year)[2:4] == name[4:6]]
+        if len(matched) == 1:
+            _WEATHER_BY_YEAR[matched[0]] = content
+
+
 def export_grouped_weather(group, context, sequence_dir):
     row = group[0]
     years = sequence_weather_years(group)
+    point = str(row["idPoint"])
+    station = str(row["idMangt"])[:4].upper()
+
+    reused = cached_weather(point, years)
+    if reused is not None:
+        # Same point, same years: the same bytes under this rotation's name.
+        for year, content in reused.items():
+            write_file(
+                sequence_dir, f"{station}{str(year)[2:4]}01.WTH", content
+            )
+        return
+
     generated = dssatweatherconverter.DssatweatherConverter().export_years(
         simulation_path(context["directory_path"], row),
         context["model_dictionary_connection"],
@@ -1259,6 +1317,7 @@ def export_grouped_weather(group, context, sequence_dir):
         sequence_dir,
         years=years,
     )
+    remember_weather(point, years, generated)
     if len(generated) != len(years):
         raise RuntimeError(
             f"Expected {len(years)} DSSAT weather files for years {years}, "

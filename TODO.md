@@ -220,13 +220,33 @@ and linked to an issue or pull request when one exists.
   authoritative and sent this audit down a false trail. Either set the soil
   to `detailed` -- which would exercise the layer path, currently untested
   end to end -- or drop the rows.
-- [ ] `writeBlockField` derives both the weather station code and the soil
-  id from `idMangt[0:4].upper()`, so they name the management rather than the
-  point. It is internally consistent -- the `.WTH` and `.SOL` files follow
-  the same convention -- but one point generates a separate weather set per
-  management: the fixture's single point `5.925_6.025` produced `ROT_*.WTH`
-  (5 files) and `FERT_*.WTH` (3), the same weather written twice. Harmless
-  for five simulations, wasteful for thousands.
+- [x] The successive converter generates a point's weather once instead of
+  once per rotation. A weather file's content depends on the point and the
+  year alone, while the rotation decides only its name -- DSSAT takes the
+  station code from the management -- so the same bytes were produced for
+  every rotation of a point, and a point carries as many rotations as the
+  experiment has. The groups are now ordered by `idPoint` so the simulations
+  sharing one reach the same worker, and a per-worker cache keyed by
+  `(point, year)` holds one point at a time. The standard converter already
+  did this with its `weathertable`; the successive one did not.
+
+  Measured in isolation, generating the weather of N rotations on one point:
+  2 → 43.7/21.7 ms, 4 → 85.1/21.8, 8 → 170.8/23.0, 16 → 344.0/26.5 ms
+  (without/with). Linear becomes constant.
+
+  Measured end to end on 8 rotations, it is **not detectable**: three runs
+  each gave 5.73/6.56/6.49 s with and 7.28/6.25/6.16 s without. A DSSAT
+  sequence costs about 700 ms of engine per group, so the variance swamps
+  the 150 ms saved. Keep the change for the cost it removes from a
+  generation-only run, where the engine time is absent and this becomes a
+  real share -- not for the speed of a run that starts an engine.
+- [ ] `writeBlockField` still derives the weather station code and the soil
+  id from `idMangt[0:4].upper()`, so they name the management rather than
+  the point. Each group's directory needs its own copy anyway, since DSSAT
+  reads from the run directory, so the duplicate files remain; only the
+  generation is now shared. Naming them after the point would make the
+  intent plain, and is a change to file names that nothing depends on --
+  worth doing only alongside something else that touches this writer.
 - [x] The rotation runs under DSSAT v4.8: exit 0, no `ERROR.OUT`, four
   crop-seasons produced against four applicable. `DEMAND` was the harvest
   date, not `MEPHO`: the season window was written as `HDATE`, so the peanut
