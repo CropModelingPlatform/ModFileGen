@@ -4,10 +4,12 @@ For whoever picks this up next, human or agent. `TODO.md` is the live task
 list; this file is the context that `TODO.md` does not carry — why things
 are the way they are, what is already settled, and what will bite you.
 
-Branch `cross-platform`, 32 commits ahead of `origin/stics`, pushed to
-`origin` (GitHub `CropModelingPlatform/ModFileGen`). Read `AGENTS.md` first:
-it is the repository's own instruction file and it takes precedence over
-this one.
+Branch `cross-platform`, tracking `origin/cross-platform` on GitHub
+(`CropModelingPlatform/ModFileGen`), branched off `stics`. For the shape of
+the work, `git log --oneline origin/stics..HEAD` — the commit messages carry
+the reasoning for each change and are worth reading before touching the area
+they describe. Read `AGENTS.md` first: it is the repository's own instruction
+file and it takes precedence over this one.
 
 ## What the work is for
 
