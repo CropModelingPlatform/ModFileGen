@@ -42,8 +42,10 @@ and linked to an issue or pull request when one exists.
      file locks when `dt=1` deletes them. `agriscale run --temp` already lets
      a caller shorten the path by hand, and `--delete-intermediate` is the
      switch that exercises the lock case;
-  5. add `windows-latest` and `macos-latest` to the CI matrix for the
-     generation-only tests.
+  5. add `windows-latest` and `macos-latest` to the CI matrix. `agriscale
+     selftest` is what it should run: it needs no engine and already covers
+     the encoding, path and date handling that differed. A generation-only
+     mode would let it check the generated files too.
   6. **done in `7913d9de`, `078a482c`, `999330cf` and this commit**: verify
      rather than download. `agriscale engines` reports where each engine was
      found and tells `not found` (ModFileGen cannot see it) from
@@ -212,11 +214,31 @@ and linked to an issue or pull request when one exists.
   name differ between two runs of the same inputs; `agriscale run --manifest`
   works around it by substituting `<run-id>`. A name derived from the run's
   inputs would serve both ends.
-- [ ] Ship the fixture as a demo dataset inside the package, so `pip install`
-  is self-sufficient without the repository. The STICS side needs no choice
-  any more; DSSAT still does: the fixture declares `CER047` for maize and an
-  empty `DSCROP` for `testcult2`, and only `PNGRO048` is available under
-  `tests/dssatsuccessive/cultivars/dssat`.
+- [x] The fixture ships inside the package, so `pip install modfilegen` is
+  self-sufficient: the CSV sources, the STICS plant files and the DSSAT 048
+  genotypes moved from `tests/fixtures/sources` to
+  `src/modfilegen/data_fixtures`, 1.1 MB of text, and the builder moved to
+  `modfilegen.fixtures` with a shim left at the old path so the tests and
+  the documented command line keep working. `agriscale fixture` writes the
+  demo databases and prints the run command with the paths filled in.
+  Verified from a clean venv outside the repository, from both the wheel and
+  the source archive: the STICS v11 successive run produces a manifest
+  identical to the repository's.
+- [x] `agriscale selftest` checks an installation with no engine, which is
+  what a student has just after installing: it builds the packaged fixture
+  and compares its rows against a digest shipped beside them, then checks
+  one thing per cross-platform defect (UTF-8 with LF, path splitting, APSIM
+  month names, DSSAT year boundaries) and reports which engines are visible.
+  A missing engine is not a failure.
+- [ ] `agriscale selftest` cannot generate a model's input files: the
+  converters write a simulation's files and start the engine in the same
+  loop, so there is no generation-only path. Adding one would let the
+  self-test and CI check the generated files themselves, which is the
+  strongest check available without an engine, and it is what step 5's
+  "generation-only tests" assumed existed.
+- [ ] Publish to PyPI. Both artefacts build and pass `twine check`; the names
+  `modfilegen` and `agriscale` are free. The upload needs an account and an
+  API token, which are the maintainer's to hold.
 - [ ] CELSIUS V32 soils only call `ParameterResolver.resolve()`, so a layer
   override (`NumLayer` > 0) on its `Soil` table is silently ignored; reject it
   with `resolve_layers("celsius", "Soil", soil_id, layer_count, ())`.

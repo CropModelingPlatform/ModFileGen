@@ -4,13 +4,29 @@ include LICENSE
 include CITATION.cff
 include requirements.txt
 include pyproject.toml
+
 recursive-include src/modfilegen *.json
 recursive-include src/modfilegen *.xml
 recursive-include src/modfilegen *.ini
 recursive-include src/modfilegen *.shp
-recursive-include data *
+recursive-include src/modfilegen *.yml
+
+# The demo fixture and the plant files it refers to, so a source install can
+# build a database and run `agriscale selftest` like a wheel can.
+recursive-include src/modfilegen/data_fixtures *
+
 recursive-exclude tests *
 recursive-exclude .github *
 recursive-exclude docs *
 exclude .gitignore
 exclude .gitlab-ci.yml
+
+# `data/` is not part of the package. It is where the converters and the
+# notebooks leave their output, and it had grown to 301 MB of run
+# directories here -- 61 MB of which a `recursive-include data *` was
+# shipping to PyPI, each copy of a test database included.
+prune data
+prune runs
+prune logs
+prune build
+prune dist

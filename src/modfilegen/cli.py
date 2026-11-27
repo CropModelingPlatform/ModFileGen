@@ -17,7 +17,7 @@ import argparse
 import json
 import sys
 
-from modfilegen import engines, run_command
+from modfilegen import engines, fixtures, run_command, selftest
 from modfilegen.version import __version__
 
 #: Printed beside an engine, so the line reads on its own.
@@ -106,6 +106,20 @@ def build_parser():
     run_command.add_arguments(
         commands.add_parser("run", help="generate the input files and run a model")
     )
+
+    demo = commands.add_parser(
+        "fixture", help="build the packaged demo databases"
+    )
+    demo.add_argument(
+        "--out", default="data", help="where to write them (default: data)"
+    )
+
+    check = commands.add_parser(
+        "selftest", help="check this installation, no engine needed"
+    )
+    check.add_argument(
+        "--out", help="keep the built fixture here instead of a temporary"
+    )
     return parser
 
 
@@ -118,6 +132,13 @@ def main(argv=None):
 
     if arguments.command == "run":
         return run_command.perform(arguments, sys.stdout)
+
+    if arguments.command == "fixture":
+        fixtures.write_demo(arguments.out, sys.stdout)
+        return 0
+
+    if arguments.command == "selftest":
+        return selftest.run(sys.stdout, arguments.out)
 
     parser.print_help()
     return 1

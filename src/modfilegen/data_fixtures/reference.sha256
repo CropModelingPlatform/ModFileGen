@@ -1,0 +1,6 @@
+# Digests of the rows the packaged fixture sources build.
+# Regenerate with modfilegen.selftest.write_reference after a
+# documented fixture migration.
+154d05018f3936be1bb4cc6ed554ec0d07f930c3da8ee50e99a61ce8f61f5f81  celsius_v32_template
+27a8e9ac6876faf9e3d609aec8fabb287d7536a955af526041f02afc8565e9e3  masterinput
+44b8ee0ba4207e437f7ce078311527899c6e2b27f45bf0255faa80bc9ca329a5  modelsdictionary

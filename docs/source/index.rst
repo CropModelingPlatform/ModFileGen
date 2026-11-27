@@ -7,6 +7,7 @@ Welcome to ModFileGen's documentation!
 
    introduction
    installation
+   installation_pypi
    engines
    command_line
    usage

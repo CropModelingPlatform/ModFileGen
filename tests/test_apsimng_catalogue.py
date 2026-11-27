@@ -9,6 +9,8 @@ import sqlite3
 
 import pytest
 
+from modfilegen import fixtures
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOGUE = ROOT / "docs/catalogues/apsimng"
@@ -28,7 +30,7 @@ def catalogue():
 def test_catalogue_matches_variables_schema_and_manifest(catalogue):
     path, columns, rows, manifest = catalogue
     with sqlite3.connect(":memory:") as connection:
-        schema = ROOT / "tests/fixtures/sources/modelsdictionary/schema.sql"
+        schema = fixtures.SOURCES_DIR / "modelsdictionary" / "schema.sql"
         connection.executescript(schema.read_text())
         expected = [row[1] for row in connection.execute("PRAGMA table_info(Variables)")]
     assert columns == expected == manifest["schema_columns"]

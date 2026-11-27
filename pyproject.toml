@@ -87,7 +87,18 @@ namespaces = true
 version = {attr = "modfilegen.version.__version__"}
 
 [tool.setuptools.package-data]
-modfilegen = ["*.json", "*.xml", "*.ini", "*.shp", "*.yml", "config/outputs/*.yml"]
+modfilegen = [
+    "*.json", "*.xml", "*.ini", "*.shp", "*.yml",
+    "config/outputs/*.yml",
+    # The demo fixture and the plant files it refers to, so that
+    # `agriscale selftest` works from a plain pip install with no
+    # repository checkout. 1.1 MB of text in all.
+    "data_fixtures/*/*.sql",
+    "data_fixtures/*/*.csv",
+    "data_fixtures/cultivars/stics/*.txt",
+    "data_fixtures/cultivars/dssat/*",
+    "data_fixtures/*.sha256",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
