@@ -230,6 +230,14 @@ and linked to an issue or pull request when one exists.
   one thing per cross-platform defect (UTF-8 with LF, path splitting, APSIM
   month names, DSSAT year boundaries) and reports which engines are visible.
   A missing engine is not a failure.
+- [x] A user's plant and genotype files reach the engine untouched, and a
+  test holds the three converters to it. They come from the user in whatever
+  shape -- CRLF, LF, mixed, cp1252, a byte-order mark, no final newline --
+  and all three copy them byte for byte with `shutil.copyfile`, never
+  decoding them. A source guard refuses an `open()` on these paths, because
+  routing them through `modfilegen.text_files` would look like an
+  improvement and would normalise the line endings and raise on anything
+  that is not UTF-8.
 - [ ] `agriscale selftest` cannot generate a model's input files: the
   converters write a simulation's files and start the engine in the same
   loop, so there is no generation-only path. Adding one would let the

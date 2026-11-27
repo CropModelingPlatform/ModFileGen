@@ -53,6 +53,25 @@ defaults to. ``successive`` chains the seasons of a rotation; it exists for
 STICS v11, DSSAT and CELSIUS V32 only, and asking for it elsewhere is
 refused by name rather than deep inside a converter.
 
+Your own plant and genotype files
+---------------------------------
+
+``--cultivars`` points at a folder you own, and its files are handed to the
+engine **exactly as they are**. All three converters copy them byte for byte
+and never decode them, so nothing needs converting first:
+
+* CRLF or LF, or a mixture -- both engines were run on both and produced
+  identical results, so the line ending is yours to keep;
+* any encoding -- cp1252 from a spreadsheet, UTF-8, a byte-order mark. The
+  converters never read these files, so none of it can fail on decoding;
+* a missing final newline.
+
+The file names come from the database, not from the folder:
+``ListCultOption.FicPlt`` for STICS, and ``CG`` plus ``DSCROP`` for DSSAT,
+whose suffix follows the requested version -- ``CER047`` resolves to
+``MZCER048.CUL`` for ``--version v48``. A file the database names and the
+folder does not hold is the one error you will see here.
+
 Pointing at the engine
 ----------------------
 
